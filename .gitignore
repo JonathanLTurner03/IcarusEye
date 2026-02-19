@@ -1,0 +1,68 @@
+# ── Python ──────────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+*.egg-info/
+dist/
+build/
+.eggs/
+*.so
+pip-wheel-metadata/
+
+# ── Virtual environments ────────────────────────────────────────────────────
+.venv/
+venv/
+env/
+.env/
+
+# ── Environment / secrets ───────────────────────────────────────────────────
+.env
+*.env.local
+*.env.production
+
+# ── Docker ──────────────────────────────────────────────────────────────────
+# Don't ignore docker-compose files — those are committed
+# Ignore any local override you don't want tracked
+docker-compose.local.yml
+
+# ── Models — large binary artifacts ────────────────────────────────────────
+# Distribute via GitHub Releases or HuggingFace, not git
+models/*.engine
+models/*.pt
+models/*.onnx
+models/*.trt
+!models/README.md
+
+# ── Sample / test media ─────────────────────────────────────────────────────
+sample/
+
+# ── Runtime generated ───────────────────────────────────────────────────────
+/tmp/
+*.log
+logs/
+
+# ── Training artifacts ──────────────────────────────────────────────────────
+training/runs/
+training/datasets/
+*.cache
+
+# ── IDE ─────────────────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ── Jupyter ─────────────────────────────────────────────────────────────────
+.ipynb_checkpoints/
+*.ipynb_checkpoints
+
+# ── Coverage / testing ──────────────────────────────────────────────────────
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/

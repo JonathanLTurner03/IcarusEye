@@ -1,0 +1,50 @@
+# IcarusEye v2
+# Current services: redis, tower
+# Remaining pipeline services (lens, hawk, mark, relay) added as built
+
+networks:
+  icaruseye:
+    driver: bridge
+
+volumes:
+  redis_data:
+
+services:
+
+  redis:
+    image: redis:7-alpine
+    container_name: icaruseye-redis
+    restart: unless-stopped
+    networks:
+      - icaruseye
+    volumes:
+      - redis_data:/data
+    command: redis-server --save "" --appendonly no
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  tower:
+    build:
+      context: .
+      dockerfile: docker/tower/Dockerfile
+    container_name: icaruseye-tower
+    restart: unless-stopped
+    networks:
+      - icaruseye
+    depends_on:
+      redis:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    env_file:
+      - .env
+    volumes:
+      - ./configs:/app/configs:ro
+      - ./pipeline/tower/static:/app/pipeline/tower/static
+      - ./sample:/app/sample:ro  # (optional) drop any .mp4 here for dev

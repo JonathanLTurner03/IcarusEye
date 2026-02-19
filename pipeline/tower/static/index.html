@@ -1,0 +1,770 @@
+<!DOCTYPE html> <!-- AI GENERATED, HAVE NOT CHECKED -->
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>IcarusEye Tower</title>
+<script src="https://cdn.jsdelivr.net/npm/hls.js@1.4.12/dist/hls.min.js"></script>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@300;400;600&display=swap');
+
+  :root {
+    --bg:        #0a0c0f;
+    --panel:     #0f1317;
+    --border:    #1e2530;
+    --accent:    #00d4ff;
+    --accent2:   #ff6b35;
+    --warn:      #ffcc00;
+    --text:      #c8d8e8;
+    --dim:       #4a5a6a;
+    --mono:      'Share Tech Mono', monospace;
+    --sans:      'Barlow', sans-serif;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-weight: 300;
+    min-height: 100vh;
+    overflow-x: hidden;
+  }
+
+  /* ── Scanline overlay ── */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 2px,
+      rgba(0,0,0,0.03) 2px,
+      rgba(0,0,0,0.03) 4px
+    );
+    pointer-events: none;
+    z-index: 1000;
+  }
+
+  /* ── Header ── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 14px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+  }
+
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .logo-icon {
+    width: 32px;
+    height: 32px;
+    position: relative;
+  }
+
+  .logo-icon svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  .logo-text {
+    font-family: var(--mono);
+    font-size: 1.1rem;
+    letter-spacing: 0.12em;
+    color: var(--accent);
+  }
+
+  .logo-sub {
+    font-size: 0.65rem;
+    color: var(--dim);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-top: 1px;
+  }
+
+  .header-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    color: var(--dim);
+  }
+
+  .status-dot {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: var(--dim);
+    transition: background 0.3s;
+  }
+
+  .status-dot.live {
+    background: var(--accent);
+    box-shadow: 0 0 6px var(--accent);
+    animation: pulse 2s infinite;
+  }
+
+  .status-dot.error {
+    background: var(--accent2);
+    box-shadow: 0 0 6px var(--accent2);
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.4; }
+  }
+
+  /* ── Layout ── */
+  .layout {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    grid-template-rows: 1fr auto;
+    height: calc(100vh - 57px);
+  }
+
+  /* ── Video pane ── */
+  .video-pane {
+    position: relative;
+    background: #000;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid var(--border);
+  }
+
+  .video-wrapper {
+    flex: 1;
+    position: relative;
+    overflow: hidden;
+  }
+
+  video {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    display: block;
+  }
+
+  /* Corner brackets */
+  .video-wrapper::before,
+  .video-wrapper::after {
+    content: '';
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    z-index: 10;
+    pointer-events: none;
+  }
+  .video-wrapper::before {
+    top: 12px; left: 12px;
+    border-top: 2px solid var(--accent);
+    border-left: 2px solid var(--accent);
+  }
+  .video-wrapper::after {
+    bottom: 12px; right: 12px;
+    border-bottom: 2px solid var(--accent);
+    border-right: 2px solid var(--accent);
+  }
+
+  .video-overlay {
+    position: absolute;
+    top: 12px;
+    right: 20px;
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    color: var(--accent);
+    opacity: 0.7;
+    letter-spacing: 0.1em;
+  }
+
+  /* Loading/error state */
+  .video-message {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    background: #000;
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    color: var(--dim);
+    letter-spacing: 0.1em;
+  }
+
+  .video-message .spinner {
+    width: 28px;
+    height: 28px;
+    border: 2px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
+  @keyframes spin {
+    to { transform: rotate(360deg); }
+  }
+
+  /* ── Controls bar ── */
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 16px;
+    border-top: 1px solid var(--border);
+    background: var(--panel);
+  }
+
+  .btn {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    letter-spacing: 0.08em;
+    padding: 6px 14px;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-transform: uppercase;
+  }
+
+  .btn:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .btn.primary {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+
+  .btn.primary:hover {
+    background: var(--accent);
+    color: var(--bg);
+  }
+
+  .btn:disabled {
+    opacity: 0.3;
+    cursor: not-allowed;
+  }
+
+  .source-display {
+    flex: 1;
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    color: var(--dim);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .source-display span {
+    color: var(--text);
+  }
+
+  /* ── Side panel ── */
+  .side-panel {
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    background: var(--panel);
+  }
+
+  .panel-section {
+    padding: 16px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .panel-label {
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin-bottom: 12px;
+  }
+
+  /* Source config */
+  .field {
+    margin-bottom: 10px;
+  }
+
+  .field label {
+    display: block;
+    font-size: 0.7rem;
+    color: var(--dim);
+    margin-bottom: 4px;
+    letter-spacing: 0.05em;
+  }
+
+  .field input,
+  .field select {
+    width: 100%;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-family: var(--mono);
+    font-size: 0.75rem;
+    padding: 7px 10px;
+    outline: none;
+    transition: border-color 0.15s;
+    appearance: none;
+  }
+
+  .field input:focus,
+  .field select:focus {
+    border-color: var(--accent);
+  }
+
+  .field select {
+    cursor: pointer;
+  }
+
+  /* Stats */
+  .stat-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .stat-cell {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    padding: 10px 12px;
+  }
+
+  .stat-label {
+    font-size: 0.6rem;
+    color: var(--dim);
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-bottom: 4px;
+  }
+
+  .stat-value {
+    font-family: var(--mono);
+    font-size: 1.1rem;
+    color: var(--accent);
+  }
+
+  .stat-value.warn { color: var(--warn); }
+  .stat-value.ok   { color: #4aff91; }
+
+  /* Log */
+  .log-feed {
+    background: var(--bg);
+    border: 1px solid var(--border);
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    color: var(--dim);
+    padding: 8px 10px;
+    height: 120px;
+    overflow-y: auto;
+    line-height: 1.6;
+  }
+
+  .log-feed .log-line { margin-bottom: 1px; }
+  .log-feed .log-line.info  { color: var(--text); }
+  .log-feed .log-line.ok    { color: #4aff91; }
+  .log-feed .log-line.error { color: var(--accent2); }
+  .log-feed .log-line.warn  { color: var(--warn); }
+
+  /* Source modal */
+  .modal-backdrop {
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.75);
+    z-index: 500;
+    display: none;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .modal-backdrop.open { display: flex; }
+
+  .modal {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 24px;
+    width: 440px;
+    max-width: 90vw;
+  }
+
+  .modal-title {
+    font-family: var(--mono);
+    font-size: 0.8rem;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin-bottom: 20px;
+  }
+
+  .modal-actions {
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    margin-top: 20px;
+  }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header>
+  <div class="logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <circle cx="16" cy="16" r="7" stroke="#00d4ff" stroke-width="1.5"/>
+        <circle cx="16" cy="16" r="3" fill="#00d4ff" opacity="0.6"/>
+        <line x1="16" y1="2" x2="16" y2="8" stroke="#00d4ff" stroke-width="1.5"/>
+        <line x1="16" y1="24" x2="16" y2="30" stroke="#00d4ff" stroke-width="1.5"/>
+        <line x1="2" y1="16" x2="8" y2="16" stroke="#00d4ff" stroke-width="1.5"/>
+        <line x1="24" y1="16" x2="30" y2="16" stroke="#00d4ff" stroke-width="1.5"/>
+        <line x1="5.6" y1="5.6" x2="9.8" y2="9.8" stroke="#00d4ff" stroke-width="1" opacity="0.5"/>
+        <line x1="22.2" y1="22.2" x2="26.4" y2="26.4" stroke="#00d4ff" stroke-width="1" opacity="0.5"/>
+        <line x1="26.4" y1="5.6" x2="22.2" y2="9.8" stroke="#00d4ff" stroke-width="1" opacity="0.5"/>
+        <line x1="9.8" y1="22.2" x2="5.6" y2="26.4" stroke="#00d4ff" stroke-width="1" opacity="0.5"/>
+      </svg>
+    </div>
+    <div>
+      <div class="logo-text">ICARUSEYE</div>
+      <div class="logo-sub">Tower v2</div>
+    </div>
+  </div>
+  <div class="header-status">
+    <div class="status-dot" id="statusDot"></div>
+    <span id="statusText">CONNECTING</span>
+  </div>
+</header>
+
+<!-- Main layout -->
+<div class="layout">
+
+  <!-- Video pane -->
+  <div class="video-pane">
+    <div class="video-wrapper">
+      <div class="video-message" id="videoMessage">
+        <div class="spinner"></div>
+        <span>AWAITING STREAM</span>
+      </div>
+      <div class="video-overlay" id="videoOverlay"></div>
+      <video id="video" playsinline muted></video>
+    </div>
+
+    <div class="controls">
+      <button class="btn primary" id="btnPlay" onclick="togglePlay()">PLAY</button>
+      <button class="btn" onclick="openSourceModal()">SOURCE</button>
+      <div class="source-display">
+        SRC &nbsp;<span id="sourceLabel">—</span>
+      </div>
+      <span id="hlsLevel" style="font-family:var(--mono);font-size:0.65rem;color:var(--dim)"></span>
+    </div>
+  </div>
+
+  <!-- Side panel -->
+  <div class="side-panel">
+
+    <!-- Live stats -->
+    <div class="panel-section">
+      <div class="panel-label">System</div>
+      <div class="stat-grid">
+        <div class="stat-cell">
+          <div class="stat-label">Stream</div>
+          <div class="stat-value" id="statStream">—</div>
+        </div>
+        <div class="stat-cell">
+          <div class="stat-label">Source FPS</div>
+          <div class="stat-value" id="statFps">—</div>
+        </div>
+        <div class="stat-cell">
+          <div class="stat-label">Detections</div>
+          <div class="stat-value" id="statDet">—</div>
+        </div>
+        <div class="stat-cell">
+          <div class="stat-label">Latency</div>
+          <div class="stat-value" id="statLatency">—</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Source config -->
+    <div class="panel-section">
+      <div class="panel-label">Video Source</div>
+      <div class="field">
+        <label>Type</label>
+        <select id="cfgType" onchange="onSourceTypeChange()">
+          <option value="file">File</option>
+          <option value="rtsp">RTSP</option>
+          <option value="rtp">RTP</option>
+          <option value="v4l2">V4L2 Device</option>
+        </select>
+      </div>
+      <div class="field" id="cfgPathField">
+        <label id="cfgPathLabel">Path</label>
+        <input type="text" id="cfgPath" placeholder="/app/sample/sample.mp4">
+      </div>
+      <button class="btn primary" style="width:100%;margin-top:4px" onclick="applySource()">
+        APPLY SOURCE
+      </button>
+    </div>
+
+    <!-- Event log -->
+    <div class="panel-section" style="flex:1">
+      <div class="panel-label">Log</div>
+      <div class="log-feed" id="logFeed"></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Source change modal (confirmation) -->
+<div class="modal-backdrop" id="sourceModal">
+  <div class="modal">
+    <div class="modal-title">Change Source</div>
+    <div class="field">
+      <label>New source URI</label>
+      <input type="text" id="modalSourceInput" placeholder="rtsp://192.168.1.x:554/stream">
+    </div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeSourceModal()">CANCEL</button>
+      <button class="btn primary" onclick="submitSourceChange()">APPLY</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── State ─────────────────────────────────────────────────────────────────
+let hls = null;
+let isPlaying = false;
+let currentSource = null;
+
+const video      = document.getElementById('video');
+const btnPlay    = document.getElementById('btnPlay');
+const statusDot  = document.getElementById('statusDot');
+const statusText = document.getElementById('statusText');
+const logFeed    = document.getElementById('logFeed');
+
+// ── Logging ───────────────────────────────────────────────────────────────
+function log(msg, level = 'info') {
+  const line = document.createElement('div');
+  line.className = `log-line ${level}`;
+  const ts = new Date().toTimeString().slice(0,8);
+  line.textContent = `${ts}  ${msg}`;
+  logFeed.appendChild(line);
+  logFeed.scrollTop = logFeed.scrollHeight;
+  // Cap at 200 lines
+  while (logFeed.children.length > 200) logFeed.removeChild(logFeed.firstChild);
+}
+
+// ── Status ────────────────────────────────────────────────────────────────
+function setStatus(state) {
+  // state: 'connecting' | 'live' | 'error' | 'idle'
+  statusDot.className = 'status-dot';
+  const map = {
+    live:       ['live',  'LIVE'],
+    error:      ['error', 'ERROR'],
+    connecting: ['',      'CONNECTING'],
+    idle:       ['',      'IDLE'],
+  };
+  const [cls, label] = map[state] || ['', state.toUpperCase()];
+  if (cls) statusDot.classList.add(cls);
+  statusText.textContent = label;
+}
+
+// ── HLS Player ───────────────────────────────────────────────────────────
+function initPlayer(source) {
+  if (hls) { hls.destroy(); hls = null; }
+
+  document.getElementById('videoMessage').style.display = 'flex';
+  video.style.display = 'none';
+  setStatus('connecting');
+  log(`Connecting to ${source}`);
+
+  if (!Hls.isSupported()) {
+    // Safari native HLS
+    video.src = source;
+    video.addEventListener('loadedmetadata', onStreamReady, { once: true });
+    return;
+  }
+
+  hls = new Hls({
+    lowLatencyMode: true,
+    liveSyncDurationCount: 2,
+    liveMaxLatencyDurationCount: 4,
+  });
+
+  hls.loadSource(source);
+  hls.attachMedia(video);
+
+  hls.on(Hls.Events.MANIFEST_PARSED, () => {
+    onStreamReady();
+  });
+
+  hls.on(Hls.Events.LEVEL_SWITCHED, (_, data) => {
+    document.getElementById('hlsLevel').textContent = `seg ${data.level}`;
+  });
+
+  hls.on(Hls.Events.ERROR, (_, data) => {
+    if (data.fatal) {
+      log(`HLS fatal: ${data.details}`, 'error');
+      setStatus('error');
+      // Retry after 3s
+      setTimeout(() => initPlayer(source), 3000);
+    } else {
+      log(`HLS warn: ${data.details}`, 'warn');
+    }
+  });
+}
+
+function onStreamReady() {
+  document.getElementById('videoMessage').style.display = 'none';
+  video.style.display = 'block';
+  setStatus('live');
+  log('Stream ready', 'ok');
+  video.play().catch(() => {});
+  isPlaying = true;
+  btnPlay.textContent = 'PAUSE';
+  updateOverlay();
+}
+
+function updateOverlay() {
+  if (!isPlaying) return;
+  const now = new Date();
+  document.getElementById('videoOverlay').textContent =
+    now.toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
+  setTimeout(updateOverlay, 1000);
+}
+
+// ── Play / Pause ──────────────────────────────────────────────────────────
+function togglePlay() {
+  if (video.paused) {
+    video.play();
+    isPlaying = true;
+    btnPlay.textContent = 'PAUSE';
+    log('Playback resumed');
+  } else {
+    video.pause();
+    isPlaying = false;
+    btnPlay.textContent = 'PLAY';
+    log('Playback paused');
+  }
+}
+
+// ── Source config ─────────────────────────────────────────────────────────
+function onSourceTypeChange() {
+  const type = document.getElementById('cfgType').value;
+  const label = document.getElementById('cfgPathLabel');
+  const input = document.getElementById('cfgPath');
+  const placeholders = {
+    file:  '/app/sample/sample.mp4',
+    rtsp:  'rtsp://192.168.1.x:554/stream',
+    rtp:   'rtp://127.0.0.1:5000',
+    v4l2:  '/dev/video0',
+  };
+  label.textContent = type === 'v4l2' ? 'Device' : 'URI';
+  input.placeholder = placeholders[type] || '';
+}
+
+async function applySource() {
+  const type = document.getElementById('cfgType').value;
+  const path = document.getElementById('cfgPath').value.trim();
+  if (!path) { log('No source path entered', 'warn'); return; }
+
+  const source = type === 'file' ? path : path;
+
+  log(`Applying source: ${source}`);
+  try {
+    const res = await fetch('/stream/source', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    document.getElementById('sourceLabel').textContent = source;
+    currentSource = source;
+    log(`Source updated — reconnecting`, 'ok');
+    setTimeout(() => initPlayer('/stream/index.m3u8'), 2000);
+  } catch (err) {
+    log(`Source change failed: ${err.message}`, 'error');
+  }
+}
+
+// ── Source modal ──────────────────────────────────────────────────────────
+function openSourceModal() {
+  document.getElementById('sourceModal').classList.add('open');
+  document.getElementById('modalSourceInput').focus();
+}
+
+function closeSourceModal() {
+  document.getElementById('sourceModal').classList.remove('open');
+}
+
+async function submitSourceChange() {
+  const source = document.getElementById('modalSourceInput').value.trim();
+  if (!source) return;
+  closeSourceModal();
+  log(`Applying source: ${source}`);
+  try {
+    const res = await fetch('/stream/source', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ source }),
+    });
+    if (!res.ok) throw new Error(await res.text());
+    document.getElementById('sourceLabel').textContent = source;
+    log('Source updated — reconnecting', 'ok');
+    setTimeout(() => initPlayer('/stream/index.m3u8'), 2000);
+  } catch (err) {
+    log(`Failed: ${err.message}`, 'error');
+  }
+}
+
+// ── Stats polling ─────────────────────────────────────────────────────────
+async function pollStatus() {
+  try {
+    const res  = await fetch('/stream/status');
+    const data = await res.json();
+
+    document.getElementById('statStream').textContent =
+      data.running ? 'ACTIVE' : 'STOPPED';
+    document.getElementById('statStream').className =
+      'stat-value ' + (data.running ? 'ok' : 'warn');
+
+    if (data.source && data.source !== currentSource) {
+      currentSource = data.source;
+      document.getElementById('sourceLabel').textContent = data.source;
+    }
+  } catch (_) {}
+
+  // Video element stats
+  if (video.readyState >= 2) {
+    const buf = video.buffered;
+    if (buf.length > 0) {
+      const latency = (buf.end(buf.length - 1) - video.currentTime).toFixed(1);
+      document.getElementById('statLatency').textContent = latency + 's';
+    }
+  }
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────
+log('Tower initializing');
+onSourceTypeChange();
+
+// Poll status every 3s
+setInterval(pollStatus, 3000);
+pollStatus();
+
+// Start the player pointing at the HLS endpoint
+initPlayer('/stream/index.m3u8');
+</script>
+</body>
+</html>
