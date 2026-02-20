@@ -48,6 +48,7 @@ services:
     volumes:
       - ./configs:/app/configs:ro
       - ./sample:/app/sample:ro
+      - ./models:/app/models:ro
     devices:
       - /dev/v4l2-nvdec:/dev/v4l2-nvdec
       - /dev/v4l2-nvenc:/dev/v4l2-nvenc

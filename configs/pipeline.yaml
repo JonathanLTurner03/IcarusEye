@@ -20,7 +20,7 @@ capture:
 # ── Models (hawk) ────────────────────────────────────────────────────────────
 models:
   - name: aerial_detection
-    engine: models/yolo26m.engine   # TensorRT engine (Phase 2+)
+    engine: /app/models/yolo26m.engine   # TensorRT engine (Phase 2+)
     type: detection                           # detection | segmentation | pose
     confidence: 0.5
     imgsz: 640
