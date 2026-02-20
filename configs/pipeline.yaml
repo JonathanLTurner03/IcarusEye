@@ -1,0 +1,55 @@
+# IcarusEye v2 — Pipeline Configuration
+# ─────────────────────────────────────────────────────────────────────────────
+# All values here are defaults.
+# Override per-service via environment variables in docker-compose.yml or .env
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ── Capture (lens) ───────────────────────────────────────────────────────────
+capture:
+  # type: v4l2 | rtsp | file | gstreamer_uri
+  # Set via env CAPTURE_TYPE — overridden automatically when DEV_MODE=true
+  type: v4l2
+  device: /dev/capture0       # udev stable symlink (host) → /dev/capture0 (container)
+  uri: ""                     # RTSP/file URI — used when type is rtsp, file, or gstreamer_uri
+  width: 1280
+  height: 720
+  framerate: 30
+  format: MJPG
+  loop: true                  # loop file source in dev mode
+
+# ── Models (hawk) ────────────────────────────────────────────────────────────
+models:
+  - name: aerial_detection
+    engine: models/yolo26s_visdrone.engine   # TensorRT engine (Phase 2+)
+    type: detection                           # detection | segmentation | pose
+    confidence: 0.5
+    imgsz: 640
+    classes: null                             # null = all classes
+    mock: false                               # true = MockEngine (set by DEV_MODE)
+
+# ── Stream (relay) ───────────────────────────────────────────────────────────
+stream:
+  enabled: true
+  host: 192.168.1.100         # Remote viewer IP — set this to your viewing machine
+  port: 5000
+  bitrate: 2000               # kbps
+  codec: h264
+
+# ── Redis ────────────────────────────────────────────────────────────────────
+redis:
+  host: redis                 # Docker service name — override with REDIS_HOST
+  port: 6379
+  db: 0
+  channels:
+    detections: icaruseye:detections   # hawk → mark
+    stats: icaruseye:stats             # all services → tower
+    control: icaruseye:control         # tower → all services
+
+# ── Dev mode ─────────────────────────────────────────────────────────────────
+# Override with DEV_MODE=true in .env — no code or YAML changes needed.
+# When enabled: capture type → file, all models → mock, sample video used.
+dev:
+  enabled: false
+  sample_video: /app/sample/sample.mp4
+  mock_inference: true
+  mock_fps: 30

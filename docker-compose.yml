@@ -19,6 +19,8 @@ services:
       - icaruseye
     volumes:
       - redis_data:/data
+    ports:
+      - "6379:6379"    # FOR DEV
     command: redis-server --save "" --appendonly no
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
