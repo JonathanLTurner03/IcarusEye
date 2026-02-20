@@ -4,9 +4,9 @@ pipeline/pipeline_service/main.py
 
 Single process running all pipeline stages as threads:
   lens   → raw_queue → [frame_server:raw]
-  raw_queue → hawk   → mark → annotated_queue → [frame_server:annotated]
+  raw_queue → hawk → mark → annotated_queue → [frame_server:annotated]
 
-Tower connects to the frame servers via Unix sockets to get MJPEG feeds.
+Tower connects to the frame servers via TCP sockets to get MJPEG feeds.
 Redis carries only metadata (stats, detections, control).
 
 Run:
@@ -24,9 +24,22 @@ import time
 from loguru import logger
 
 from pipeline.lens import factory as lens_factory
+from pipeline.hawk import factory as hawk_factory
+from pipeline.mark.annotator import draw as mark_draw
 from pipeline.shared.config import load_config
-from pipeline.shared.redis_client import StatsMessage, publish_stats, wait_for_redis
-from pipeline.frame_bus import display_queue, inference_queue, annotated_queue, put_nowait_drop
+from pipeline.shared.redis_client import (
+    DetectionMessage,
+    StatsMessage,
+    publish_detection,
+    publish_stats,
+    wait_for_redis,
+)
+from pipeline.frame_bus import (
+    display_queue,
+    inference_queue,
+    annotated_queue,
+    put_nowait_drop,
+)
 from pipeline.frame_server import FrameServer, RAW_PORT, ANNOTATED_PORT
 
 
@@ -46,9 +59,7 @@ def lens_thread(cfg, r, stop_event: threading.Event) -> None:
     last_deliver = 0.0
     stats_every  = 3.0
 
-    # Determine inference skip ratio after source is created
-    # (native_fps only available after open(), computed below)
-    inference_skip = 1
+    inference_skip  = 1
     inference_frame = 0
 
     with src:
@@ -115,26 +126,95 @@ def lens_thread(cfg, r, stop_event: threading.Event) -> None:
 def hawk_mark_thread(cfg, r, stop_event: threading.Event) -> None:
     """
     Inference + annotation thread.
-    Pulls from inference_queue (separate from display so tower gets every frame),
-    runs hawk (stub), mark draws boxes, pushes to annotated_queue.
+
+    Pulls frames from inference_queue (throttled by lens to cfg_fps).
+    Runs hawk (mock or TensorRT) → publishes DetectionMessage to Redis.
+    Passes InferenceResult to mark → draws bboxes → pushes to annotated_queue.
+
+    Tower's annotated feed shows the live annotated stream.
+    Tower's raw feed shows the unmodified stream at full native fps.
     """
-    frame_count  = 0
-    last_detections = []
+    model_cfg = cfg.models[0]  # primary model — multi-model cascade is Phase 4
 
-    logger.info("Hawk/mark thread started (stub — passthrough)")
+    engine     = hawk_factory.create(model_cfg)
+    frame_count = 0
+    fps_window  = []
+    last_stats  = time.monotonic()
+    stats_every = 3.0
 
-    while not stop_event.is_set():
-        try:
-            frame = inference_queue.get(timeout=0.5)
-        except Exception:
-            continue
+    logger.info(
+        "Hawk/mark thread starting — engine={} mock={}",
+        model_cfg.engine, model_cfg.mock,
+    )
 
-        frame_count += 1
+    with engine:
+        logger.info("Hawk/mark thread ready — engine loaded")
 
-        # Passthrough — annotated feed mirrors raw until hawk is built
-        put_nowait_drop(annotated_queue, frame)
+        while not stop_event.is_set():
+            try:
+                frame = inference_queue.get(timeout=0.5)
+            except Exception:
+                continue
 
-    logger.info("Hawk/mark thread stopped")
+            # ── Hawk: run inference ───────────────────────────────────────────
+            result = engine.infer(frame)
+            frame_count += 1
+
+            # ── Publish detection metadata to Redis ───────────────────────────
+            # mark subscribes to this if it runs as a separate service.
+            # In this single-process design we pass result directly to mark,
+            # but we still publish for tower's stats panel + future decoupling.
+            det_msg = DetectionMessage(
+                frame_id=frame.frame_id,
+                timestamp=result.timestamp,
+                source="hawk",
+                detections=[
+                    {
+                        "label":      d.label,
+                        "confidence": d.confidence,
+                        "bbox":       d.bbox,
+                        "class_id":   d.class_id,
+                    }
+                    for d in result.detections
+                ],
+                inference_ms=result.inference_ms,
+            )
+            try:
+                publish_detection(det_msg, r)
+            except Exception:
+                pass  # Redis publish failures are non-fatal
+
+            # ── Mark: annotate frame ──────────────────────────────────────────
+            annotated = mark_draw(frame, result)
+            put_nowait_drop(annotated_queue, annotated)
+
+            # ── Stats ─────────────────────────────────────────────────────────
+            now = time.monotonic()
+            fps_window.append(now)
+            fps_window = [t for t in fps_window if now - t <= 2.0]
+
+            if now - last_stats >= stats_every:
+                fps = len(fps_window) / min(now - last_stats, 2.0) if fps_window else 0.0
+                n_det = len(result.detections)
+                logger.info(
+                    "Hawk: fps={:.1f} det={} inf={:.1f}ms engine={}",
+                    fps, n_det, result.inference_ms, result.engine_name,
+                )
+                publish_stats(StatsMessage(
+                    source="hawk",
+                    timestamp=now,
+                    fps=round(fps, 1),
+                    inference_ms=result.inference_ms,
+                    extra={
+                        "frame_count":     frame_count,
+                        "detections":      n_det,
+                        "engine":          result.engine_name,
+                        "model":           model_cfg.name,
+                    },
+                ), r)
+                last_stats = now
+
+    logger.info("Hawk/mark thread stopped — {} frames processed", frame_count)
 
 
 def run() -> None:

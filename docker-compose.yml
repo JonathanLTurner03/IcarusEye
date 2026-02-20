@@ -37,7 +37,10 @@ services:
     expose:
       - "5100"   # raw frame server
       - "5101"   # annotated frame server
+    runtime: nvidia                          
     environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all           
       - REDIS_HOST=redis
       - REDIS_PORT=6379
     env_file:
@@ -45,12 +48,11 @@ services:
     volumes:
       - ./configs:/app/configs:ro
       - ./sample:/app/sample:ro
-    # ── Jetson / V4L2 (uncomment on hardware) ────────────────────────────────
-    # devices:
-    #   - /dev/icaruseye/capture0:/dev/capture0
-    # runtime: nvidia
-    # environment:
-    #   - NVIDIA_VISIBLE_DEVICES=all
+    devices:
+      - /dev/icaruseye/capture0:/dev/capture0
+      - /dev/v4l2-nvdec:/dev/v4l2-nvdec
+      - /dev/v4l2-nvenc:/dev/v4l2-nvenc
+  #   - /dev/icaruseye/capture0:/dev/capture0
 
   tower:
     build:
