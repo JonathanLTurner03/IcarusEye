@@ -5,7 +5,8 @@ pipeline/lens/file_source.py
 Reads frames from a local video file via OpenCV.
 Used in DEV_MODE — no hardware required.
 Loops the file indefinitely when cfg.capture.loop is True.
-Throttles to cfg.capture.framerate to simulate real capture hardware.
+Always delivers at native FPS — frame skipping for inference is handled
+upstream by the pipeline service, not here.
 """
 
 from __future__ import annotations
@@ -23,26 +24,35 @@ from pipeline.shared.config import CaptureConfig
 
 class FileSource(CaptureSource):
     """
-    Reads frames from a local video file.
+    Reads frames from a local video file at native FPS.
 
     Config fields used:
         capture.uri       — path to video file
         capture.width     — resize output width  (0 = native)
         capture.height    — resize output height (0 = native)
-        capture.framerate — target FPS throttle (0 = use file's native FPS)
+        capture.framerate — recorded for reference but NOT used to throttle.
+                            Frame skipping is handled by the pipeline service.
         capture.loop      — restart from beginning when EOF is reached
     """
 
     def __init__(self, cfg: CaptureConfig):
         super().__init__(name="file")
-        self._path      = cfg.uri or cfg.device
-        self._width     = cfg.width
-        self._height    = cfg.height
-        self._loop      = cfg.loop
-        self._cfg_fps   = cfg.framerate   # requested FPS from config (may be 0)
-        self._target_fps = 0.0            # resolved after open()
+        self._path       = cfg.uri or cfg.device
+        self._width      = cfg.width
+        self._height     = cfg.height
+        self._loop       = cfg.loop
+        self._cfg_fps    = cfg.framerate
+        self._native_fps = 0.0
         self._cap: Optional[cv2.VideoCapture] = None
-        self._last_read: float = 0.0
+        self._next_frame_time: float = 0.0  # absolute deadline for next frame
+
+    @property
+    def native_fps(self) -> float:
+        return self._native_fps
+
+    @property
+    def cfg_fps(self) -> float:
+        return float(self._cfg_fps) if self._cfg_fps else self._native_fps
 
     # ── CaptureSource interface ───────────────────────────────────────────────
 
@@ -55,36 +65,29 @@ class FileSource(CaptureSource):
         if not self._cap.isOpened():
             raise RuntimeError(f"FileSource: OpenCV could not open {self._path}")
 
-        native_fps = self._cap.get(cv2.CAP_PROP_FPS) or 30.0
-        native_w   = int(self._cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-        native_h   = int(self._cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-        frames     = int(self._cap.get(cv2.CAP_PROP_FRAME_COUNT))
-
-        # Throttle to config FPS if set, but never faster than native —
-        # if native is lower than config, just use native.
-        if self._cfg_fps:
-            self._target_fps = min(float(self._cfg_fps), native_fps)
-        else:
-            self._target_fps = native_fps
+        self._native_fps = self._cap.get(cv2.CAP_PROP_FPS) or 30.0
+        native_w = int(self._cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+        native_h = int(self._cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+        frames   = int(self._cap.get(cv2.CAP_PROP_FRAME_COUNT))
 
         self._opened = True
+        self._next_frame_time = time.monotonic()  # deadline for first frame
         logger.info(
-            "FileSource opened: {} — {}x{} @ {:.1f}fps native, {} frames, "
-            "throttle={:.1f}fps, loop={}",
-            self._path, native_w, native_h, native_fps, frames,
-            self._target_fps, self._loop,
+            "FileSource opened: {} — {}x{} @ {:.1f}fps, {} frames, loop={}",
+            self._path, native_w, native_h, self._native_fps, frames, self._loop,
         )
 
     def read(self) -> Optional[Frame]:
         if not self._cap or not self._opened:
             return None
 
-        # Throttle to target FPS
-        if self._target_fps:
-            target_interval = 1.0 / self._target_fps
-            elapsed = time.monotonic() - self._last_read
-            if elapsed < target_interval:
-                time.sleep(target_interval - elapsed)
+        # Deadline-based timing — sleep until the next frame is due
+        # This accumulates correctly and doesn't drift like fixed-interval sleep
+        interval = 1.0 / self._native_fps
+        now = time.monotonic()
+        if self._next_frame_time > now:
+            time.sleep(self._next_frame_time - now)
+        self._next_frame_time += interval
 
         ok, frame = self._cap.read()
 
@@ -92,6 +95,7 @@ class FileSource(CaptureSource):
             if self._loop:
                 logger.debug("FileSource: EOF — looping")
                 self._cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                self._next_frame_time = time.monotonic()  # reset deadline on loop
                 ok, frame = self._cap.read()
                 if not ok:
                     return None
@@ -99,8 +103,6 @@ class FileSource(CaptureSource):
                 logger.info("FileSource: EOF — stopping")
                 self._opened = False
                 return None
-
-        self._last_read = time.monotonic()
 
         if self._width and self._height:
             frame = cv2.resize(frame, (self._width, self._height))

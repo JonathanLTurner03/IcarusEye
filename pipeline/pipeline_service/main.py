@@ -31,32 +31,59 @@ from pipeline.frame_server import FrameServer, RAW_PORT, ANNOTATED_PORT
 
 
 def lens_thread(cfg, r, stop_event: threading.Event) -> None:
-    """Capture frames and put them on raw_queue."""
+    """
+    Capture frames and fan out:
+      display_queue   — every frame at native fps (tower always gets full rate)
+      inference_queue — every Nth frame at cfg_fps (hawk runs at lower rate)
+    """
+    from pipeline.lens.file_source import FileSource
+
     src = lens_factory.create(cfg.capture)
-    frame_count = 0
-    drop_count  = 0
-    fps_window  = []
-    last_stats  = time.monotonic()
-    stats_every = 3.0
+    frame_count  = 0
+    drop_count   = 0
+    fps_window   = []
+    last_stats   = time.monotonic()
+    last_deliver = 0.0
+    stats_every  = 3.0
+
+    # Determine inference skip ratio after source is created
+    # (native_fps only available after open(), computed below)
+    inference_skip = 1
+    inference_frame = 0
 
     with src:
-        logger.info("Lens thread started — source: {}", src.name)
+        # Compute skip ratio now that source is open and native_fps is known
+        if isinstance(src, FileSource) and src.cfg_fps < src.native_fps:
+            inference_skip = max(1, round(src.native_fps / src.cfg_fps))
+        logger.info(
+            "Lens thread started — source: {} native_fps={:.1f} inference_skip={}",
+            src.name,
+            src.native_fps if isinstance(src, FileSource) else cfg.capture.framerate,
+            inference_skip,
+        )
+
         while not stop_event.is_set():
             frame = src.read()
             if frame is None:
                 if not src.is_open:
                     logger.warning("Lens: source closed")
                     break
-                time.sleep(0.001)
-                drop_count += 1
                 continue
 
-            # Fanout to display (tower) and inference (hawk) independently
-            put_nowait_drop(display_queue, frame)
-            put_nowait_drop(inference_queue, frame)
-            frame_count += 1
-
             now = time.monotonic()
+            gap_ms = (now - last_deliver) * 1000 if last_deliver else 0
+            last_deliver = now
+
+            frame_count += 1
+            inference_frame += 1
+
+            # Tower always gets every frame at native fps
+            put_nowait_drop(display_queue, frame)
+
+            # Hawk gets every Nth frame
+            if inference_skip == 1 or (inference_frame % inference_skip) == 0:
+                put_nowait_drop(inference_queue, frame)
+
             fps_window.append(now)
             fps_window = [t for t in fps_window if now - t <= 2.0]
 
@@ -64,6 +91,10 @@ def lens_thread(cfg, r, stop_event: threading.Event) -> None:
                 fps       = len(fps_window) / min(now - last_stats, 2.0) if fps_window else 0.0
                 total     = frame_count + drop_count
                 drop_rate = drop_count / total if total > 0 else 0.0
+                logger.info(
+                    "Lens: fps={:.1f} delivered={} inf_skip={} last_gap={:.1f}ms",
+                    fps, frame_count, inference_skip, gap_ms,
+                )
                 publish_stats(StatsMessage(
                     source="lens",
                     timestamp=now,
@@ -78,7 +109,7 @@ def lens_thread(cfg, r, stop_event: threading.Event) -> None:
                 last_stats = now
                 drop_count = 0
 
-    logger.info("Lens thread stopped — {} frames", frame_count)
+    logger.info("Lens thread stopped — {} frames delivered", frame_count)
 
 
 def hawk_mark_thread(cfg, r, stop_event: threading.Event) -> None:

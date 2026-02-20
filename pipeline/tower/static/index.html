@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>IcarusEye Tower</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@300;400;600&display=swap');
@@ -18,6 +18,8 @@
     --dim:       #4a5a6a;
     --mono:      'Share Tech Mono', monospace;
     --sans:      'Barlow', sans-serif;
+    --header-h:  56px;
+    --tab-h:     56px;
   }
 
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -27,402 +29,185 @@
     color: var(--text);
     font-family: var(--sans);
     font-weight: 300;
-    height: 100vh;
+    height: 100dvh;
     overflow: hidden;
     display: flex;
     flex-direction: column;
   }
 
-  /* ── Scanline overlay ── */
   body::before {
     content: '';
     position: fixed;
     inset: 0;
-    background: repeating-linear-gradient(
-      0deg,
-      transparent,
-      transparent 2px,
-      rgba(0,0,0,0.03) 2px,
-      rgba(0,0,0,0.03) 4px
-    );
+    background: repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.03) 2px,rgba(0,0,0,0.03) 4px);
     pointer-events: none;
     z-index: 1000;
   }
 
-  /* ── Header ── */
   header {
     flex-shrink: 0;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    padding: 14px 24px;
-    border-bottom: 1px solid var(--border);
-    background: var(--panel);
-  }
-
-  .logo {
-    display: flex;
-    align-items: center;
-    gap: 12px;
-  }
-
-  .logo-icon {
-    width: 32px;
-    height: 32px;
-    position: relative;
-  }
-
-  .logo-icon svg {
-    width: 100%;
-    height: 100%;
-  }
-
-  .logo-text {
-    font-family: var(--mono);
-    font-size: 1.1rem;
-    letter-spacing: 0.12em;
-    color: var(--accent);
-  }
-
-  .logo-sub {
-    font-size: 0.65rem;
-    color: var(--dim);
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-    margin-top: 1px;
-  }
-
-  .header-status {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    font-family: var(--mono);
-    font-size: 0.75rem;
-    color: var(--dim);
-  }
-
-  .status-dot {
-    width: 7px;
-    height: 7px;
-    border-radius: 50%;
-    background: var(--dim);
-    transition: background 0.3s;
-  }
-
-  .status-dot.live {
-    background: var(--accent);
-    box-shadow: 0 0 6px var(--accent);
-    animation: pulse 2s infinite;
-  }
-
-  .status-dot.error {
-    background: var(--accent2);
-    box-shadow: 0 0 6px var(--accent2);
-  }
-
-  @keyframes pulse {
-    0%, 100% { opacity: 1; }
-    50%       { opacity: 0.4; }
-  }
-
-  /* ── Layout ── */
-  .layout {
-    display: grid;
-    grid-template-columns: 1fr 320px;
-
-    flex: 1;
-    min-height: 0;
-  }
-
-  /* ── Video pane ── */
-  .video-pane {
-    position: relative;
-    background: #000;
-    display: flex;
-    flex-direction: column;
-    min-height: 0;
-    border-right: 1px solid var(--border);
-  }
-
-  .video-wrapper {
-    flex: 1;
-    position: relative;
-    overflow: hidden;
-  }
-
-  video {
-    width: 100%;
-    height: 100%;
-    object-fit: contain;
-    display: block;
-  }
-
-  /* Corner brackets */
-  .video-wrapper::before,
-  .video-wrapper::after {
-    content: '';
-    position: absolute;
-    width: 20px;
-    height: 20px;
-    z-index: 10;
-    pointer-events: none;
-  }
-  .video-wrapper::before {
-    top: 12px; left: 12px;
-    border-top: 2px solid var(--accent);
-    border-left: 2px solid var(--accent);
-  }
-  .video-wrapper::after {
-    bottom: 12px; right: 12px;
-    border-bottom: 2px solid var(--accent);
-    border-right: 2px solid var(--accent);
-  }
-
-  .video-overlay {
-    position: absolute;
-    top: 12px;
-    right: 20px;
-    font-family: var(--mono);
-    font-size: 0.65rem;
-    color: var(--accent);
-    opacity: 0.7;
-    letter-spacing: 0.1em;
-  }
-
-  /* Loading/error state */
-  .video-message {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    gap: 12px;
-    background: #000;
-    font-family: var(--mono);
-    font-size: 0.8rem;
-    color: var(--dim);
-    letter-spacing: 0.1em;
-  }
-
-  .video-message .spinner {
-    width: 28px;
-    height: 28px;
-    border: 2px solid var(--border);
-    border-top-color: var(--accent);
-    border-radius: 50%;
-    animation: spin 0.8s linear infinite;
-  }
-
-  @keyframes spin {
-    to { transform: rotate(360deg); }
-  }
-
-  /* ── Controls bar ── */
-  .controls {
-    display: flex;
-    align-items: center;
-    gap: 12px;
     padding: 10px 16px;
-    border-top: 1px solid var(--border);
-    background: var(--panel);
-  }
-
-  .btn {
-    background: transparent;
-    border: 1px solid var(--border);
-    color: var(--text);
-    font-family: var(--mono);
-    font-size: 0.7rem;
-    letter-spacing: 0.08em;
-    padding: 6px 14px;
-    cursor: pointer;
-    transition: all 0.15s;
-    text-transform: uppercase;
-  }
-
-  .btn:hover {
-    border-color: var(--accent);
-    color: var(--accent);
-  }
-
-  .btn.primary {
-    border-color: var(--accent);
-    color: var(--accent);
-  }
-
-  .btn.primary:hover {
-    background: var(--accent);
-    color: var(--bg);
-  }
-
-  .btn:disabled {
-    opacity: 0.3;
-    cursor: not-allowed;
-  }
-
-  .source-display {
-    flex: 1;
-    font-family: var(--mono);
-    font-size: 0.68rem;
-    color: var(--dim);
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-
-  .source-display span {
-    color: var(--text);
-  }
-
-  /* ── Side panel ── */
-  .side-panel {
-    display: flex;
-    flex-direction: column;
-    overflow-y: auto;
-    background: var(--panel);
-  }
-
-  .panel-section {
-    padding: 16px;
+    padding-top: max(10px, env(safe-area-inset-top));
     border-bottom: 1px solid var(--border);
-  }
-
-  .panel-label {
-    font-family: var(--mono);
-    font-size: 0.6rem;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-    color: var(--dim);
-    margin-bottom: 12px;
-  }
-
-  /* Source config */
-  .field {
-    margin-bottom: 10px;
-  }
-
-  .field label {
-    display: block;
-    font-size: 0.7rem;
-    color: var(--dim);
-    margin-bottom: 4px;
-    letter-spacing: 0.05em;
-  }
-
-  .field input,
-  .field select {
-    width: 100%;
-    background: var(--bg);
-    border: 1px solid var(--border);
-    color: var(--text);
-    font-family: var(--mono);
-    font-size: 0.75rem;
-    padding: 7px 10px;
-    outline: none;
-    transition: border-color 0.15s;
-    appearance: none;
-  }
-
-  .field input:focus,
-  .field select:focus {
-    border-color: var(--accent);
-  }
-
-  .field select {
-    cursor: pointer;
-  }
-
-  /* Stats */
-  .stat-grid {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 8px;
-  }
-
-  .stat-cell {
-    background: var(--bg);
-    border: 1px solid var(--border);
-    padding: 10px 12px;
-  }
-
-  .stat-label {
-    font-size: 0.6rem;
-    color: var(--dim);
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    margin-bottom: 4px;
-  }
-
-  .stat-value {
-    font-family: var(--mono);
-    font-size: 1.1rem;
-    color: var(--accent);
-  }
-
-  .stat-value.warn { color: var(--warn); }
-  .stat-value.ok   { color: #4aff91; }
-
-  /* Log */
-  .log-feed {
-    background: var(--bg);
-    border: 1px solid var(--border);
-    font-family: var(--mono);
-    font-size: 0.65rem;
-    color: var(--dim);
-    padding: 8px 10px;
-    height: 120px;
-    overflow-y: auto;
-    line-height: 1.6;
-  }
-
-  .log-feed .log-line { margin-bottom: 1px; }
-  .log-feed .log-line.info  { color: var(--text); }
-  .log-feed .log-line.ok    { color: #4aff91; }
-  .log-feed .log-line.error { color: var(--accent2); }
-  .log-feed .log-line.warn  { color: var(--warn); }
-
-  /* Source modal */
-  .modal-backdrop {
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.75);
-    z-index: 500;
-    display: none;
-    align-items: center;
-    justify-content: center;
-  }
-
-  .modal-backdrop.open { display: flex; }
-
-  .modal {
     background: var(--panel);
-    border: 1px solid var(--border);
-    padding: 24px;
-    width: 440px;
-    max-width: 90vw;
+    height: var(--header-h);
   }
 
-  .modal-title {
-    font-family: var(--mono);
-    font-size: 0.8rem;
-    letter-spacing: 0.15em;
-    text-transform: uppercase;
-    color: var(--accent);
-    margin-bottom: 20px;
+  .logo { display: flex; align-items: center; gap: 10px; }
+  .logo-icon { width: 28px; height: 28px; flex-shrink: 0; }
+  .logo-icon svg { width: 100%; height: 100%; }
+  .logo-text { font-family: var(--mono); font-size: 1rem; letter-spacing: 0.12em; color: var(--accent); }
+  .logo-sub { font-size: 0.6rem; color: var(--dim); letter-spacing: 0.2em; text-transform: uppercase; margin-top: 1px; }
+
+  .header-status { display: flex; align-items: center; gap: 8px; font-family: var(--mono); font-size: 0.75rem; color: var(--dim); }
+  .status-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--dim); transition: background 0.3s; flex-shrink: 0; }
+  .status-dot.live { background: var(--accent); box-shadow: 0 0 6px var(--accent); animation: pulse 2s infinite; }
+  .status-dot.error { background: var(--accent2); box-shadow: 0 0 6px var(--accent2); }
+
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .layout { display: grid; grid-template-columns: 1fr 320px; flex: 1; min-height: 0; }
+
+  .video-pane { position: relative; background: #000; display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--border); }
+  .video-wrapper { flex: 1; position: relative; overflow: hidden; }
+  #videoFeed { width: 100%; height: 100%; object-fit: contain; display: block; }
+
+  .video-wrapper::before, .video-wrapper::after { content: ''; position: absolute; width: 20px; height: 20px; z-index: 10; pointer-events: none; }
+  .video-wrapper::before { top: 12px; left: 12px; border-top: 2px solid var(--accent); border-left: 2px solid var(--accent); }
+  .video-wrapper::after { bottom: 12px; right: 12px; border-bottom: 2px solid var(--accent); border-right: 2px solid var(--accent); }
+
+  .video-overlay { position: absolute; top: 12px; right: 20px; font-family: var(--mono); font-size: 0.65rem; color: var(--accent); opacity: 0.7; letter-spacing: 0.1em; pointer-events: none; }
+
+  .video-message { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: #000; font-family: var(--mono); font-size: 0.8rem; color: var(--dim); letter-spacing: 0.1em; }
+  .video-message .spinner { width: 28px; height: 28px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; }
+
+  .controls { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-top: 1px solid var(--border); background: var(--panel); }
+
+  .btn { background: transparent; border: 1px solid var(--border); color: var(--text); font-family: var(--mono); font-size: 0.7rem; letter-spacing: 0.08em; padding: 8px 14px; cursor: pointer; transition: all 0.15s; text-transform: uppercase; touch-action: manipulation; -webkit-tap-highlight-color: transparent; min-height: 36px; }
+  .btn:hover, .btn:active { border-color: var(--accent); color: var(--accent); }
+  .btn.primary { border-color: var(--accent); color: var(--accent); }
+  .btn.primary:hover, .btn.primary:active { background: var(--accent); color: var(--bg); }
+  .btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+  .source-display { flex: 1; font-family: var(--mono); font-size: 0.68rem; color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .source-display span { color: var(--text); }
+
+  .side-panel { display: flex; flex-direction: column; overflow-y: auto; background: var(--panel); -webkit-overflow-scrolling: touch; }
+  .panel-section { padding: 16px; border-bottom: 1px solid var(--border); }
+  .panel-label { font-family: var(--mono); font-size: 0.6rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--dim); margin-bottom: 12px; }
+
+  .field { margin-bottom: 10px; }
+  .field label { display: block; font-size: 0.7rem; color: var(--dim); margin-bottom: 4px; letter-spacing: 0.05em; }
+  .field input, .field select { width: 100%; background: var(--bg); border: 1px solid var(--border); color: var(--text); font-family: var(--mono); font-size: 0.75rem; padding: 9px 10px; outline: none; transition: border-color 0.15s; appearance: none; -webkit-appearance: none; min-height: 40px; border-radius: 0; }
+  .field input:focus, .field select:focus { border-color: var(--accent); }
+  .field select { cursor: pointer; }
+
+  .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .stat-cell { background: var(--bg); border: 1px solid var(--border); padding: 10px 12px; }
+  .stat-label { font-size: 0.6rem; color: var(--dim); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 4px; }
+  .stat-value { font-family: var(--mono); font-size: 1.1rem; color: var(--accent); }
+  .stat-value.warn { color: var(--warn); }
+  .stat-value.ok { color: #4aff91; }
+
+  .log-feed { background: var(--bg); border: 1px solid var(--border); font-family: var(--mono); font-size: 0.65rem; color: var(--dim); padding: 8px 10px; height: 120px; overflow-y: auto; line-height: 1.6; -webkit-overflow-scrolling: touch; }
+  .log-feed .log-line { margin-bottom: 1px; }
+  .log-feed .log-line.info { color: var(--text); }
+  .log-feed .log-line.ok { color: #4aff91; }
+  .log-feed .log-line.error { color: var(--accent2); }
+  .log-feed .log-line.warn { color: var(--warn); }
+
+  .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 500; display: none; align-items: center; justify-content: center; padding: 16px; }
+  .modal-backdrop.open { display: flex; }
+  .modal { background: var(--panel); border: 1px solid var(--border); padding: 24px; width: 440px; max-width: 100%; }
+  .modal-title { font-family: var(--mono); font-size: 0.8rem; letter-spacing: 0.15em; text-transform: uppercase; color: var(--accent); margin-bottom: 20px; }
+  .modal-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 20px; }
+
+  /* Tab bar hidden on desktop */
+  .tab-bar { display: none; }
+
+  /* Drawer overlay */
+  .drawer-overlay { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 190; }
+  .drawer-overlay.open { display: block; }
+
+  /* ══ MOBILE ══ */
+  @media (max-width: 768px) {
+    :root { --header-h: 52px; --tab-h: 58px; }
+
+    .layout { grid-template-columns: 1fr; }
+
+    .video-pane { border-right: none; height: calc(100dvh - var(--header-h) - var(--tab-h)); }
+
+    /* Slide-up drawer */
+    .side-panel {
+      position: fixed;
+      bottom: var(--tab-h);
+      left: 0; right: 0;
+      height: 62vh;
+      max-height: 62vh;
+      z-index: 200;
+      border-top: 1px solid var(--accent);
+      transform: translateY(100%);
+      transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 -8px 32px rgba(0,212,255,0.08);
+    }
+    .side-panel.drawer-open { transform: translateY(0); }
+    .side-panel::before { content: ''; display: block; width: 36px; height: 3px; background: var(--border); border-radius: 2px; margin: 10px auto 6px; flex-shrink: 0; }
+
+    .controls { padding: 8px 12px; }
+    .controls .source-display { display: none; }
+
+    .btn { min-height: 44px; padding: 10px 14px; }
+    .log-feed { height: 100px; }
+
+    /* Bottom tab bar */
+    .tab-bar {
+      display: flex;
+      background: var(--panel);
+      border-top: 1px solid var(--border);
+      height: var(--tab-h);
+      padding-bottom: env(safe-area-inset-bottom);
+      flex-shrink: 0;
+    }
+
+    .tab-btn {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 4px;
+      background: transparent;
+      border: none;
+      color: var(--dim);
+      font-family: var(--mono);
+      font-size: 0.55rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      cursor: pointer;
+      transition: color 0.15s;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
+    .tab-btn svg { width: 20px; height: 20px; stroke: currentColor; fill: none; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+    .tab-btn.active { color: var(--accent); }
+    .tab-btn.active svg { filter: drop-shadow(0 0 4px var(--accent)); }
   }
 
-  .modal-actions {
-    display: flex;
-    gap: 8px;
-    justify-content: flex-end;
-    margin-top: 20px;
+  @media (max-width: 768px) and (orientation: landscape) {
+    :root { --tab-h: 46px; }
+    .video-pane { height: calc(100dvh - var(--header-h) - var(--tab-h)); }
+    .side-panel { height: 72vh; }
+    .tab-btn svg { width: 16px; height: 16px; }
+    .tab-btn { font-size: 0.5rem; gap: 2px; }
   }
 </style>
 </head>
 <body>
 
-<!-- Header -->
 <header>
   <div class="logo">
     <div class="logo-icon">
@@ -450,10 +235,8 @@
   </div>
 </header>
 
-<!-- Main layout -->
 <div class="layout">
 
-  <!-- Video pane -->
   <div class="video-pane">
     <div class="video-wrapper">
       <div class="video-message" id="videoMessage">
@@ -463,44 +246,24 @@
       <div class="video-overlay" id="videoOverlay"></div>
       <img id="videoFeed" style="width:100%;height:100%;object-fit:contain;display:none;" alt="">
     </div>
-
     <div class="controls">
       <button class="btn" onclick="openSourceModal()">SOURCE</button>
-      <div class="source-display">
-        FEED &nbsp;<span id="sourceLabel">—</span>
-      </div>
+      <div class="source-display">FEED &nbsp;<span id="sourceLabel">—</span></div>
       <span id="feedStatus" style="font-family:var(--mono);font-size:0.65rem;color:var(--dim)"></span>
     </div>
+  </div>
 
-  </div><!-- /video-pane -->
-
-  <!-- Side panel -->
-  <div class="side-panel">
-
-    <!-- Live stats -->
+  <div class="side-panel" id="sidePanel">
     <div class="panel-section">
       <div class="panel-label">System</div>
       <div class="stat-grid">
-        <div class="stat-cell">
-          <div class="stat-label">Stream</div>
-          <div class="stat-value" id="statStream">—</div>
-        </div>
-        <div class="stat-cell">
-          <div class="stat-label">Source FPS</div>
-          <div class="stat-value" id="statFps">—</div>
-        </div>
-        <div class="stat-cell">
-          <div class="stat-label">Detections</div>
-          <div class="stat-value" id="statDet">—</div>
-        </div>
-        <div class="stat-cell">
-          <div class="stat-label">Latency</div>
-          <div class="stat-value" id="statLatency">—</div>
-        </div>
+        <div class="stat-cell"><div class="stat-label">Stream</div><div class="stat-value" id="statStream">—</div></div>
+        <div class="stat-cell"><div class="stat-label">Source FPS</div><div class="stat-value" id="statFps">—</div></div>
+        <div class="stat-cell"><div class="stat-label">Detections</div><div class="stat-value" id="statDet">—</div></div>
+        <div class="stat-cell"><div class="stat-label">Latency</div><div class="stat-value" id="statLatency">—</div></div>
       </div>
     </div>
 
-    <!-- Source config -->
     <div class="panel-section">
       <div class="panel-label">Video Source</div>
       <div class="field">
@@ -514,29 +277,46 @@
       </div>
       <div class="field" id="cfgPathField">
         <label id="cfgPathLabel">Path</label>
-        <input type="text" id="cfgPath" placeholder="/app/sample/sample.mp4">
+        <input type="text" id="cfgPath" placeholder="/app/sample/sample.mp4" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">
       </div>
-      <button class="btn primary" style="width:100%;margin-top:4px" onclick="applySource()">
-        APPLY SOURCE
-      </button>
+      <button class="btn primary" style="width:100%;margin-top:4px" onclick="applySource()">APPLY SOURCE</button>
     </div>
 
-    <!-- Event log -->
     <div class="panel-section" style="flex:1">
       <div class="panel-label">Log</div>
       <div class="log-feed" id="logFeed"></div>
     </div>
-
   </div>
+
 </div>
 
-<!-- Source change modal (confirmation) -->
+<div class="drawer-overlay" id="drawerOverlay" onclick="closeDrawer()"></div>
+
+<nav class="tab-bar">
+  <button class="tab-btn active" id="tabVideo" onclick="switchTab('video')">
+    <svg viewBox="0 0 24 24"><rect x="2" y="5" width="15" height="14" rx="1.5"/><path d="M17 9l5-3v12l-5-3V9z"/></svg>
+    FEED
+  </button>
+  <button class="tab-btn" id="tabStats" onclick="switchTab('stats')">
+    <svg viewBox="0 0 24 24"><rect x="3" y="14" width="4" height="7" rx="1"/><rect x="10" y="9" width="4" height="12" rx="1"/><rect x="17" y="4" width="4" height="17" rx="1"/></svg>
+    STATS
+  </button>
+  <button class="tab-btn" id="tabConfig" onclick="switchTab('config')">
+    <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+    CONFIG
+  </button>
+  <button class="tab-btn" id="tabLog" onclick="switchTab('log')">
+    <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+    LOG
+  </button>
+</nav>
+
 <div class="modal-backdrop" id="sourceModal">
   <div class="modal">
     <div class="modal-title">Change Source</div>
     <div class="field">
       <label>New source URI</label>
-      <input type="text" id="modalSourceInput" placeholder="rtsp://192.168.1.x:554/stream">
+      <input type="text" id="modalSourceInput" placeholder="rtsp://192.168.1.x:554/stream" autocomplete="off" autocorrect="off" autocapitalize="none" spellcheck="false">
     </div>
     <div class="modal-actions">
       <button class="btn" onclick="closeSourceModal()">CANCEL</button>
@@ -546,38 +326,68 @@
 </div>
 
 <script>
-// ── State ─────────────────────────────────────────────────────────────────
-const imgFeed   = document.getElementById('videoFeed');
-const statusDot = document.getElementById('statusDot');
+const imgFeed    = document.getElementById('videoFeed');
+const statusDot  = document.getElementById('statusDot');
 const statusText = document.getElementById('statusText');
-const logFeed   = document.getElementById('logFeed');
+const logFeed    = document.getElementById('logFeed');
+const sidePanel  = document.getElementById('sidePanel');
+const overlay    = document.getElementById('drawerOverlay');
 
-// ── Logging ───────────────────────────────────────────────────────────────
+const isMobile = () => window.innerWidth <= 768;
+
+function switchTab(tab) {
+  if (!isMobile()) return;
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tab' + tab[0].toUpperCase() + tab.slice(1)).classList.add('active');
+  if (tab === 'video') {
+    closeDrawer();
+  } else {
+    openDrawer();
+    const sectionMap = { stats: 0, config: 1, log: 2 };
+    const sections = sidePanel.querySelectorAll('.panel-section');
+    const idx = sectionMap[tab];
+    if (sections[idx]) setTimeout(() => sections[idx].scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+  }
+}
+
+function openDrawer() {
+  sidePanel.classList.add('drawer-open');
+  overlay.classList.add('open');
+}
+
+function closeDrawer() {
+  sidePanel.classList.remove('drawer-open');
+  overlay.classList.remove('open');
+  if (isMobile()) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById('tabVideo').classList.add('active');
+  }
+}
+
+// Swipe down to close
+let touchStartY = 0;
+sidePanel.addEventListener('touchstart', e => { touchStartY = e.touches[0].clientY; }, { passive: true });
+sidePanel.addEventListener('touchend', e => {
+  if (e.changedTouches[0].clientY - touchStartY > 60 && sidePanel.scrollTop === 0) closeDrawer();
+}, { passive: true });
+
 function log(msg, level = 'info') {
   const line = document.createElement('div');
   line.className = `log-line ${level}`;
-  const ts = new Date().toTimeString().slice(0,8);
-  line.textContent = `${ts}  ${msg}`;
+  line.textContent = `${new Date().toTimeString().slice(0,8)}  ${msg}`;
   logFeed.appendChild(line);
   logFeed.scrollTop = logFeed.scrollHeight;
   while (logFeed.children.length > 200) logFeed.removeChild(logFeed.firstChild);
 }
 
-// ── Status ────────────────────────────────────────────────────────────────
 function setStatus(state) {
   statusDot.className = 'status-dot';
-  const map = {
-    live:       ['live',  'LIVE'],
-    error:      ['error', 'ERROR'],
-    connecting: ['',      'CONNECTING'],
-    idle:       ['',      'IDLE'],
-  };
+  const map = { live: ['live','LIVE'], error: ['error','ERROR'], connecting: ['','CONNECTING'], idle: ['','IDLE'] };
   const [cls, label] = map[state] || ['', state.toUpperCase()];
   if (cls) statusDot.classList.add(cls);
   statusText.textContent = label;
 }
 
-// ── MJPEG feed ────────────────────────────────────────────────────────────
 function startFeed(url) {
   log(`Connecting to ${url}`);
   setStatus('connecting');
@@ -599,7 +409,6 @@ function startFeed(url) {
     imgFeed.style.display = 'none';
     document.getElementById('videoMessage').style.display = 'flex';
     document.getElementById('videoMessage').querySelector('span').textContent = 'PIPELINE OFFLINE';
-    // Retry after 3s
     setTimeout(() => startFeed(url), 3000);
   };
 
@@ -608,90 +417,53 @@ function startFeed(url) {
 
 function updateOverlay() {
   if (imgFeed.style.display === 'none') return;
-  const now = new Date();
-  document.getElementById('videoOverlay').textContent =
-    now.toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
+  document.getElementById('videoOverlay').textContent = new Date().toISOString().replace('T',' ').slice(0,19) + ' UTC';
   setTimeout(updateOverlay, 1000);
 }
 
-// ── Source modal ──────────────────────────────────────────────────────────
-function openSourceModal() {
-  document.getElementById('sourceModal').classList.add('open');
-  document.getElementById('modalSourceInput').focus();
-}
-
-function closeSourceModal() {
-  document.getElementById('sourceModal').classList.remove('open');
-}
-
+function openSourceModal() { document.getElementById('sourceModal').classList.add('open'); document.getElementById('modalSourceInput').focus(); }
+function closeSourceModal() { document.getElementById('sourceModal').classList.remove('open'); }
 function submitSourceChange() {
-  const source = document.getElementById('modalSourceInput').value.trim();
-  if (!source) return;
+  if (!document.getElementById('modalSourceInput').value.trim()) return;
   closeSourceModal();
-  // Source changes affect the pipeline service config — inform user
-  log(`Note: change source via pipeline config or env and restart pipeline`, 'warn');
+  log('Note: change source via pipeline config or env and restart pipeline', 'warn');
 }
 
-// ── Source config (display only — pipeline controls source) ───────────────
 function onSourceTypeChange() {
   const type = document.getElementById('cfgType').value;
-  const label = document.getElementById('cfgPathLabel');
-  const input = document.getElementById('cfgPath');
-  const placeholders = {
-    file: '/app/sample/sample.mp4',
-    rtsp: 'rtsp://192.168.1.x:554/stream',
-    rtp:  'rtp://127.0.0.1:5000',
-    v4l2: '/dev/video0',
-  };
-  label.textContent = type === 'v4l2' ? 'Device' : 'URI';
-  input.placeholder = placeholders[type] || '';
+  const p = { file:'/app/sample/sample.mp4', rtsp:'rtsp://192.168.1.x:554/stream', rtp:'rtp://127.0.0.1:5000', v4l2:'/dev/video0' };
+  document.getElementById('cfgPathLabel').textContent = type === 'v4l2' ? 'Device' : 'URI';
+  document.getElementById('cfgPath').placeholder = p[type] || '';
 }
 
 async function applySource() {
   log('Source changes require updating pipeline config and restarting pipeline service', 'warn');
 }
 
-// ── Stats polling ─────────────────────────────────────────────────────────
 async function pollStatus() {
-  // Pipeline connection status
   try {
-    const res  = await fetch('/stream/status');
-    const data = await res.json();
-
+    const data = await fetch('/stream/status').then(r => r.json());
     const connected = data.raw_connected || data.annotated_connected;
-    document.getElementById('feedStatus').textContent =
-      connected ? `${data.annotated_frames || data.raw_frames} frames` : 'disconnected';
+    document.getElementById('feedStatus').textContent = connected ? `${data.annotated_frames || data.raw_frames} frames` : 'disconnected';
   } catch (_) {}
-
-  // Pipeline service stats from Redis
   try {
-    const res   = await fetch('/stream/stats');
-    const stats = await res.json();
-
+    const stats = await fetch('/stream/stats').then(r => r.json());
     const lens = stats['lens'];
     if (lens) {
-      const fpsEl = document.getElementById('statFps');
-      fpsEl.textContent = lens.stale ? 'STALE' : lens.fps.toFixed(1);
-      fpsEl.className   = 'stat-value ' + (lens.stale ? 'warn' : '');
-
-      // Stream cell shows pipeline connection
-      const streamEl = document.getElementById('statStream');
-      streamEl.textContent = lens.stale ? 'STALE' : 'ACTIVE';
-      streamEl.className   = 'stat-value ' + (lens.stale ? 'warn' : 'ok');
+      document.getElementById('statFps').textContent = lens.stale ? 'STALE' : lens.fps.toFixed(1);
+      document.getElementById('statFps').className = 'stat-value ' + (lens.stale ? 'warn' : '');
+      document.getElementById('statStream').textContent = lens.stale ? 'STALE' : 'ACTIVE';
+      document.getElementById('statStream').className = 'stat-value ' + (lens.stale ? 'warn' : 'ok');
     }
-
     const hawk = stats['hawk'];
     if (hawk) {
-      const detEl = document.getElementById('statDet');
-      const det   = hawk.extra && hawk.extra.detections_per_frame !== undefined
-        ? hawk.extra.detections_per_frame.toFixed(1) : '—';
-      detEl.textContent = hawk.stale ? 'STALE' : det;
-      detEl.className   = 'stat-value ' + (hawk.stale ? 'warn' : '');
+      const det = hawk.extra && hawk.extra.detections_per_frame !== undefined ? hawk.extra.detections_per_frame.toFixed(1) : '—';
+      document.getElementById('statDet').textContent = hawk.stale ? 'STALE' : det;
+      document.getElementById('statDet').className = 'stat-value ' + (hawk.stale ? 'warn' : '');
     }
   } catch (_) {}
 }
 
-// ── Init ──────────────────────────────────────────────────────────────────
 log('Tower initializing');
 onSourceTypeChange();
 setInterval(pollStatus, 3000);
