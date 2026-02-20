@@ -4,7 +4,6 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>IcarusEye Tower</title>
-<script src="https://cdn.jsdelivr.net/npm/hls.js@1.4.12/dist/hls.min.js"></script>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@300;400;600&display=swap');
 
@@ -459,21 +458,21 @@
     <div class="video-wrapper">
       <div class="video-message" id="videoMessage">
         <div class="spinner"></div>
-        <span>AWAITING STREAM</span>
+        <span>AWAITING PIPELINE</span>
       </div>
       <div class="video-overlay" id="videoOverlay"></div>
-      <video id="video" playsinline muted></video>
+      <img id="videoFeed" style="width:100%;height:100%;object-fit:contain;display:none;" alt="">
     </div>
 
     <div class="controls">
-      <button class="btn primary" id="btnPlay" onclick="togglePlay()">PLAY</button>
       <button class="btn" onclick="openSourceModal()">SOURCE</button>
       <div class="source-display">
-        SRC &nbsp;<span id="sourceLabel">—</span>
+        FEED &nbsp;<span id="sourceLabel">—</span>
       </div>
-      <span id="hlsLevel" style="font-family:var(--mono);font-size:0.65rem;color:var(--dim)"></span>
+      <span id="feedStatus" style="font-family:var(--mono);font-size:0.65rem;color:var(--dim)"></span>
     </div>
-  </div>
+
+  </div><!-- /video-pane -->
 
   <!-- Side panel -->
   <div class="side-panel">
@@ -548,15 +547,10 @@
 
 <script>
 // ── State ─────────────────────────────────────────────────────────────────
-let hls = null;
-let isPlaying = false;
-let currentSource = null;
-
-const video      = document.getElementById('video');
-const btnPlay    = document.getElementById('btnPlay');
-const statusDot  = document.getElementById('statusDot');
+const imgFeed   = document.getElementById('videoFeed');
+const statusDot = document.getElementById('statusDot');
 const statusText = document.getElementById('statusText');
-const logFeed    = document.getElementById('logFeed');
+const logFeed   = document.getElementById('logFeed');
 
 // ── Logging ───────────────────────────────────────────────────────────────
 function log(msg, level = 'info') {
@@ -566,13 +560,11 @@ function log(msg, level = 'info') {
   line.textContent = `${ts}  ${msg}`;
   logFeed.appendChild(line);
   logFeed.scrollTop = logFeed.scrollHeight;
-  // Cap at 200 lines
   while (logFeed.children.length > 200) logFeed.removeChild(logFeed.firstChild);
 }
 
 // ── Status ────────────────────────────────────────────────────────────────
 function setStatus(state) {
-  // state: 'connecting' | 'live' | 'error' | 'idle'
   statusDot.className = 'status-dot';
   const map = {
     live:       ['live',  'LIVE'],
@@ -585,122 +577,41 @@ function setStatus(state) {
   statusText.textContent = label;
 }
 
-// ── HLS Player ───────────────────────────────────────────────────────────
-function initPlayer(source) {
-  if (hls) { hls.destroy(); hls = null; }
-
-  document.getElementById('videoMessage').style.display = 'flex';
-  video.style.display = 'none';
+// ── MJPEG feed ────────────────────────────────────────────────────────────
+function startFeed(url) {
+  log(`Connecting to ${url}`);
   setStatus('connecting');
-  log(`Connecting to ${source}`);
+  document.getElementById('videoMessage').style.display = 'flex';
+  imgFeed.style.display = 'none';
 
-  if (!Hls.isSupported()) {
-    // Safari native HLS
-    video.src = source;
-    video.addEventListener('loadedmetadata', onStreamReady, { once: true });
-    return;
-  }
+  imgFeed.onload = () => {
+    document.getElementById('videoMessage').style.display = 'none';
+    imgFeed.style.display = 'block';
+    setStatus('live');
+    log('Feed connected', 'ok');
+    document.getElementById('sourceLabel').textContent = url;
+    updateOverlay();
+  };
 
-  hls = new Hls({
-    lowLatencyMode: true,
-    liveSyncDurationCount: 2,
-    liveMaxLatencyDurationCount: 4,
-  });
+  imgFeed.onerror = () => {
+    setStatus('error');
+    log('Feed error — pipeline may not be running', 'error');
+    imgFeed.style.display = 'none';
+    document.getElementById('videoMessage').style.display = 'flex';
+    document.getElementById('videoMessage').querySelector('span').textContent = 'PIPELINE OFFLINE';
+    // Retry after 3s
+    setTimeout(() => startFeed(url), 3000);
+  };
 
-  hls.loadSource(source);
-  hls.attachMedia(video);
-
-  hls.on(Hls.Events.MANIFEST_PARSED, () => {
-    onStreamReady();
-  });
-
-  hls.on(Hls.Events.LEVEL_SWITCHED, (_, data) => {
-    document.getElementById('hlsLevel').textContent = `seg ${data.level}`;
-  });
-
-  hls.on(Hls.Events.ERROR, (_, data) => {
-    if (data.fatal) {
-      log(`HLS fatal: ${data.details}`, 'error');
-      setStatus('error');
-      // Retry after 3s
-      setTimeout(() => initPlayer(source), 3000);
-    } else {
-      log(`HLS warn: ${data.details}`, 'warn');
-    }
-  });
-}
-
-function onStreamReady() {
-  document.getElementById('videoMessage').style.display = 'none';
-  video.style.display = 'block';
-  setStatus('live');
-  log('Stream ready', 'ok');
-  video.play().catch(() => {});
-  isPlaying = true;
-  btnPlay.textContent = 'PAUSE';
-  updateOverlay();
+  imgFeed.src = url + '?t=' + Date.now();
 }
 
 function updateOverlay() {
-  if (!isPlaying) return;
+  if (imgFeed.style.display === 'none') return;
   const now = new Date();
   document.getElementById('videoOverlay').textContent =
     now.toISOString().replace('T', ' ').slice(0, 19) + ' UTC';
   setTimeout(updateOverlay, 1000);
-}
-
-// ── Play / Pause ──────────────────────────────────────────────────────────
-function togglePlay() {
-  if (video.paused) {
-    video.play();
-    isPlaying = true;
-    btnPlay.textContent = 'PAUSE';
-    log('Playback resumed');
-  } else {
-    video.pause();
-    isPlaying = false;
-    btnPlay.textContent = 'PLAY';
-    log('Playback paused');
-  }
-}
-
-// ── Source config ─────────────────────────────────────────────────────────
-function onSourceTypeChange() {
-  const type = document.getElementById('cfgType').value;
-  const label = document.getElementById('cfgPathLabel');
-  const input = document.getElementById('cfgPath');
-  const placeholders = {
-    file:  '/app/sample/sample.mp4',
-    rtsp:  'rtsp://192.168.1.x:554/stream',
-    rtp:   'rtp://127.0.0.1:5000',
-    v4l2:  '/dev/video0',
-  };
-  label.textContent = type === 'v4l2' ? 'Device' : 'URI';
-  input.placeholder = placeholders[type] || '';
-}
-
-async function applySource() {
-  const type = document.getElementById('cfgType').value;
-  const path = document.getElementById('cfgPath').value.trim();
-  if (!path) { log('No source path entered', 'warn'); return; }
-
-  const source = type === 'file' ? path : path;
-
-  log(`Applying source: ${source}`);
-  try {
-    const res = await fetch('/stream/source', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ source }),
-    });
-    if (!res.ok) throw new Error(await res.text());
-    document.getElementById('sourceLabel').textContent = source;
-    currentSource = source;
-    log(`Source updated — reconnecting`, 'ok');
-    setTimeout(() => initPlayer('/stream/index.m3u8'), 2000);
-  } catch (err) {
-    log(`Source change failed: ${err.message}`, 'error');
-  }
 }
 
 // ── Source modal ──────────────────────────────────────────────────────────
@@ -713,63 +624,79 @@ function closeSourceModal() {
   document.getElementById('sourceModal').classList.remove('open');
 }
 
-async function submitSourceChange() {
+function submitSourceChange() {
   const source = document.getElementById('modalSourceInput').value.trim();
   if (!source) return;
   closeSourceModal();
-  log(`Applying source: ${source}`);
-  try {
-    const res = await fetch('/stream/source', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ source }),
-    });
-    if (!res.ok) throw new Error(await res.text());
-    document.getElementById('sourceLabel').textContent = source;
-    log('Source updated — reconnecting', 'ok');
-    setTimeout(() => initPlayer('/stream/index.m3u8'), 2000);
-  } catch (err) {
-    log(`Failed: ${err.message}`, 'error');
-  }
+  // Source changes affect the pipeline service config — inform user
+  log(`Note: change source via pipeline config or env and restart pipeline`, 'warn');
+}
+
+// ── Source config (display only — pipeline controls source) ───────────────
+function onSourceTypeChange() {
+  const type = document.getElementById('cfgType').value;
+  const label = document.getElementById('cfgPathLabel');
+  const input = document.getElementById('cfgPath');
+  const placeholders = {
+    file: '/app/sample/sample.mp4',
+    rtsp: 'rtsp://192.168.1.x:554/stream',
+    rtp:  'rtp://127.0.0.1:5000',
+    v4l2: '/dev/video0',
+  };
+  label.textContent = type === 'v4l2' ? 'Device' : 'URI';
+  input.placeholder = placeholders[type] || '';
+}
+
+async function applySource() {
+  log('Source changes require updating pipeline config and restarting pipeline service', 'warn');
 }
 
 // ── Stats polling ─────────────────────────────────────────────────────────
 async function pollStatus() {
+  // Pipeline connection status
   try {
     const res  = await fetch('/stream/status');
     const data = await res.json();
 
-    document.getElementById('statStream').textContent =
-      data.running ? 'ACTIVE' : 'STOPPED';
-    document.getElementById('statStream').className =
-      'stat-value ' + (data.running ? 'ok' : 'warn');
-
-    if (data.source && data.source !== currentSource) {
-      currentSource = data.source;
-      document.getElementById('sourceLabel').textContent = data.source;
-    }
+    const connected = data.raw_connected || data.annotated_connected;
+    document.getElementById('feedStatus').textContent =
+      connected ? `${data.annotated_frames || data.raw_frames} frames` : 'disconnected';
   } catch (_) {}
 
-  // Video element stats
-  if (video.readyState >= 2) {
-    const buf = video.buffered;
-    if (buf.length > 0) {
-      const latency = (buf.end(buf.length - 1) - video.currentTime).toFixed(1);
-      document.getElementById('statLatency').textContent = latency + 's';
+  // Pipeline service stats from Redis
+  try {
+    const res   = await fetch('/stream/stats');
+    const stats = await res.json();
+
+    const lens = stats['lens'];
+    if (lens) {
+      const fpsEl = document.getElementById('statFps');
+      fpsEl.textContent = lens.stale ? 'STALE' : lens.fps.toFixed(1);
+      fpsEl.className   = 'stat-value ' + (lens.stale ? 'warn' : '');
+
+      // Stream cell shows pipeline connection
+      const streamEl = document.getElementById('statStream');
+      streamEl.textContent = lens.stale ? 'STALE' : 'ACTIVE';
+      streamEl.className   = 'stat-value ' + (lens.stale ? 'warn' : 'ok');
     }
-  }
+
+    const hawk = stats['hawk'];
+    if (hawk) {
+      const detEl = document.getElementById('statDet');
+      const det   = hawk.extra && hawk.extra.detections_per_frame !== undefined
+        ? hawk.extra.detections_per_frame.toFixed(1) : '—';
+      detEl.textContent = hawk.stale ? 'STALE' : det;
+      detEl.className   = 'stat-value ' + (hawk.stale ? 'warn' : '');
+    }
+  } catch (_) {}
 }
 
 // ── Init ──────────────────────────────────────────────────────────────────
 log('Tower initializing');
 onSourceTypeChange();
-
-// Poll status every 3s
 setInterval(pollStatus, 3000);
 pollStatus();
-
-// Start the player pointing at the HLS endpoint
-initPlayer('/stream/index.m3u8');
+startFeed('/stream/feed');
 </script>
 </body>
 </html>

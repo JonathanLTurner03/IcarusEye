@@ -11,8 +11,8 @@ capture:
   type: v4l2
   device: /dev/capture0       # udev stable symlink (host) → /dev/capture0 (container)
   uri: ""                     # RTSP/file URI — used when type is rtsp, file, or gstreamer_uri
-  width: 1280
-  height: 720
+  width: 0
+  height: 0
   framerate: 30
   format: MJPG
   loop: true                  # loop file source in dev mode

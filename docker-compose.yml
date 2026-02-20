@@ -1,7 +1,4 @@
 # IcarusEye v2
-# Current services: redis, tower
-# Remaining pipeline services (lens, hawk, mark, relay) added as built
-
 networks:
   icaruseye:
     driver: bridge
@@ -19,14 +16,41 @@ services:
       - icaruseye
     volumes:
       - redis_data:/data
-    ports:
-      - "6379:6379"    # FOR DEV
     command: redis-server --save "" --appendonly no
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
       timeout: 3s
       retries: 5
+
+  pipeline:
+    build:
+      context: .
+      dockerfile: docker/pipeline/Dockerfile
+    container_name: icaruseye-pipeline
+    restart: unless-stopped
+    networks:
+      - icaruseye
+    depends_on:
+      redis:
+        condition: service_healthy
+    expose:
+      - "5100"   # raw frame server
+      - "5101"   # annotated frame server
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    env_file:
+      - .env
+    volumes:
+      - ./configs:/app/configs:ro
+      - ./sample:/app/sample:ro
+    # ── Jetson / V4L2 (uncomment on hardware) ────────────────────────────────
+    # devices:
+    #   - /dev/icaruseye/capture0:/dev/capture0
+    # runtime: nvidia
+    # environment:
+    #   - NVIDIA_VISIBLE_DEVICES=all
 
   tower:
     build:
@@ -44,9 +68,9 @@ services:
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - PIPELINE_HOST=pipeline
     env_file:
       - .env
     volumes:
       - ./configs:/app/configs:ro
       - ./pipeline/tower/static:/app/pipeline/tower/static
-      - ./sample:/app/sample:ro  # (optional) drop any .mp4 here for dev

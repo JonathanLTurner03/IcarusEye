@@ -1,58 +1,135 @@
 """
-Stream API serves HLS playlist and segments, plus source control.
+IcarusEye v2 — Stream API
+pipeline/tower/api/stream.py
+
+MJPEG streaming endpoints and pipeline stats.
+Replaces the HLS/ffmpeg approach entirely.
+
+Endpoints:
+  GET /stream/feed       — annotated feed (falls back to raw if no annotations yet)
+  GET /stream/raw        — raw feed from lens (no detections drawn)
+  GET /stream/annotated  — annotated feed from mark
+  GET /stream/status     — pipeline connection status
+  GET /stream/stats      — per-service Redis stats
 """
-import os
-from fastapi import APIRouter, Request, HTTPException
-from fastapi.responses import FileResponse, JSONResponse
-from pydantic import BaseModel
+
+import asyncio
+import time
+from typing import AsyncGenerator
+
+from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse, StreamingResponse
 
 router = APIRouter()
 
+# MJPEG boundary string
+BOUNDARY = "icaruseye_frame"
 
-def _segment_dir(request: Request) -> str:
-    return os.getenv("HLS_SEGMENT_DIR", "/tmp/icaruseye_hls")
+
+async def _mjpeg_generator(receiver, request: Request) -> AsyncGenerator[bytes, None]:
+    """
+    Async generator that yields MJPEG frames as fast as the pipeline produces them.
+    Tracks frame count instead of identity comparison to detect new frames.
+    """
+    last_frame_count = -1
+
+    while not await request.is_disconnected():
+        current_count = receiver.frame_count
+
+        if current_count == last_frame_count:
+            # No new frame yet — yield briefly and check again
+            await asyncio.sleep(0.01)
+            continue
+
+        jpeg = receiver.latest_jpeg
+        if jpeg is None:
+            await asyncio.sleep(0.05)
+            continue
+
+        last_frame_count = current_count
+
+        yield (
+            f"--{BOUNDARY}\r\n"
+            f"Content-Type: image/jpeg\r\n"
+            f"Content-Length: {len(jpeg)}\r\n"
+            f"\r\n"
+        ).encode() + jpeg + b"\r\n"
 
 
-@router.get("/index.m3u8")
-async def playlist(request: Request):
-    path = os.path.join(_segment_dir(request), "index.m3u8")
-    if not os.path.exists(path):
-        raise HTTPException(status_code=503, detail="Stream not ready yet")
-    return FileResponse(
-        path,
-        media_type="application/vnd.apple.mpegurl",
-        headers={"Cache-Control": "no-cache"},
+@router.get("/feed")
+async def feed(request: Request):
+    """Annotated feed — falls back to raw if annotated not connected."""
+    ann = getattr(request.app.state, "annotated_receiver", None)
+    raw = getattr(request.app.state, "raw_receiver", None)
+
+    # Use annotated if connected and has frames, else raw
+    receiver = (ann if (ann and ann.is_connected and ann.latest_jpeg is not None)
+                else raw)
+
+    if receiver is None:
+        return JSONResponse({"error": "No pipeline connected"}, status_code=503)
+
+    return StreamingResponse(
+        _mjpeg_generator(receiver, request),
+        media_type=f"multipart/x-mixed-replace; boundary={BOUNDARY}",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
 
-@router.get("/{segment}")
-async def segment(segment: str, request: Request):
-    if not segment.endswith(".ts"):
-        raise HTTPException(status_code=400, detail="Invalid segment")
-    path = os.path.join(_segment_dir(request), segment)
-    if not os.path.exists(path):
-        raise HTTPException(status_code=404, detail="Segment not found")
-    return FileResponse(path, media_type="video/mp2t")
+@router.get("/raw")
+async def raw_feed(request: Request):
+    """Raw feed from lens — no detections drawn."""
+    receiver = getattr(request.app.state, "raw_receiver", None)
+    if receiver is None or not receiver.is_connected:
+        return JSONResponse({"error": "Raw feed not connected"}, status_code=503)
+    return StreamingResponse(
+        _mjpeg_generator(receiver, request),
+        media_type=f"multipart/x-mixed-replace; boundary={BOUNDARY}",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@router.get("/annotated")
+async def annotated_feed(request: Request):
+    """Annotated feed from mark."""
+    receiver = getattr(request.app.state, "annotated_receiver", None)
+    if receiver is None or not receiver.is_connected:
+        return JSONResponse({"error": "Annotated feed not connected"}, status_code=503)
+    return StreamingResponse(
+        _mjpeg_generator(receiver, request),
+        media_type=f"multipart/x-mixed-replace; boundary={BOUNDARY}",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.get("/status")
 async def status(request: Request):
-    transcoder = request.app.state.transcoder
+    raw = getattr(request.app.state, "raw_receiver", None)
+    ann = getattr(request.app.state, "annotated_receiver", None)
     return JSONResponse({
-        "running": transcoder.is_running if transcoder else False,
-        "source":  transcoder.source if transcoder else None,
+        "raw_connected":        raw.is_connected if raw else False,
+        "annotated_connected":  ann.is_connected if ann else False,
+        "raw_frames":           raw.frame_count if raw else 0,
+        "annotated_frames":     ann.frame_count if ann else 0,
     })
 
 
-class SourceUpdate(BaseModel):
-    source: str
+@router.get("/stats")
+async def pipeline_stats(request: Request):
+    """Return latest stats published by each pipeline service via Redis."""
+    raw_stats: dict = getattr(request.app.state, "pipeline_stats", {})
+    now = time.time()
+    stale_after = 15.0
 
+    result = {}
+    for service, data in raw_stats.items():
+        received_at = data.get("_received_at", 0)
+        result[service] = {
+            "fps":          data.get("fps", 0.0),
+            "drop_rate":    data.get("drop_rate", 0.0),
+            "inference_ms": data.get("inference_ms", 0.0),
+            "extra":        data.get("extra", {}),
+            "stale":        (now - received_at) > stale_after,
+        }
 
-@router.post("/source")
-async def change_source(body: SourceUpdate, request: Request):
-    """Hot-swap the video source without restarting Tower."""
-    transcoder = request.app.state.transcoder
-    if not transcoder:
-        raise HTTPException(status_code=503, detail="Transcoder not initialized")
-    await transcoder.change_source(body.source)
-    return {"status": "ok", "source": body.source}
+    return JSONResponse(result)
