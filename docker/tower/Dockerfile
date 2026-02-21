@@ -1,5 +1,5 @@
 # IcarusEye v2 — Tower service (dashboard + MJPEG server)
-FROM nvcr.io/nvidia/l4t-ml:r36.4.0-py3
+FROM python:3.10-slim
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 \
