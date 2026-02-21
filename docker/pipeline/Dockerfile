@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY requirements/base.txt  /tmp/requirements-base.txt
 COPY requirements/lens.txt  /tmp/requirements-lens.txt
 RUN pip install --no-cache-dir \
+    --index-url https://pypi.org/simple \
     -r /tmp/requirements-base.txt \
     -r /tmp/requirements-lens.txt
 
