@@ -1,5 +1,5 @@
 # IcarusEye v2 — Pipeline service (lens + hawk + mark)
-FROM nvcr.io/nvidia/l4t-pytorch:r35.2.1-pth2.0-py3
+FROM dustynv/l4t-pytorch:r36.4.0
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 \
