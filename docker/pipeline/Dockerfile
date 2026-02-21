@@ -1,5 +1,5 @@
 # IcarusEye v2 — Pipeline service (lens + hawk + mark)
-FROM python:3.11-slim
+FROM nvcr.io/nvidia/l4t-ml:r36.4.0-py3
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libglib2.0-0 \
