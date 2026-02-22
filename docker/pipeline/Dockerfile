@@ -21,4 +21,4 @@ ENV PYTHONUNBUFFERED=1
 
 COPY pipeline/ ./pipeline/
 
-CMD ["python", "-m", "pipeline.pipeline_service.main"]
+CMD ["python3", "-m", "pipeline.pipeline_service.main"]
