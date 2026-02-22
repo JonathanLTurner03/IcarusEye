@@ -26,6 +26,8 @@ from loguru import logger
 
 from pipeline.lens import factory as lens_factory
 from pipeline.hawk import factory as hawk_factory
+from pipeline.hawk.tensorrt_engine import EngineVersionMismatch
+from pipeline.hawk.export import find_pt, build_engine
 from pipeline.mark.annotator import draw as mark_draw
 from pipeline.shared.config import load_config, CaptureConfig
 from pipeline.shared.redis_client import (
@@ -179,88 +181,147 @@ def hawk_mark_thread(cfg, r, stop_event: threading.Event) -> None:
 
     Tower's annotated feed shows the live annotated stream.
     Tower's raw feed shows the unmodified stream at full native fps.
-    """
-    model_cfg = cfg.models[0]  # primary model — multi-model cascade is Phase 4
 
-    engine      = hawk_factory.create(model_cfg)
-    frame_count = 0
-    fps_window  = []
-    last_stats  = time.monotonic()
-    stats_every = 3.0
+    If the .engine file is missing or has a TRT version mismatch, the thread
+    automatically re-exports the engine from the matching .pt checkpoint and
+    retries. A build-status banner is shown in Tower during the export.
+    """
+    model_cfg   = cfg.models[0]  # primary model — multi-model cascade is Phase 4
+    total_frames = 0
 
     logger.info(
         "Hawk/mark thread starting — engine={} mock={}",
         model_cfg.engine, model_cfg.mock,
     )
 
-    with engine:
-        logger.info("Hawk/mark thread ready — engine loaded")
-
-        while not stop_event.is_set():
-            try:
-                frame = inference_queue.get(timeout=0.5)
-            except Exception:
-                continue
-
-            # ── Hawk: run inference ───────────────────────────────────────────
-            result = engine.infer(frame)
-            frame_count += 1
-
-            # ── Publish detection metadata to Redis ───────────────────────────
-            # mark subscribes to this if it runs as a separate service.
-            # In this single-process design we pass result directly to mark,
-            # but we still publish for tower's stats panel + future decoupling.
-            det_msg = DetectionMessage(
-                frame_id=frame.frame_id,
-                timestamp=result.timestamp,
+    def _publish_build(status: str, message: str = "", error: str = "") -> None:
+        extra: dict = {"build_status": status}
+        if message:
+            extra["build_progress"] = message
+        if error:
+            extra["build_error"] = error
+        try:
+            publish_stats(StatsMessage(
                 source="hawk",
-                detections=[
-                    {
-                        "label":      d.label,
-                        "confidence": d.confidence,
-                        "bbox":       d.bbox,
-                        "class_id":   d.class_id,
-                    }
-                    for d in result.detections
-                ],
-                inference_ms=result.inference_ms,
+                timestamp=time.monotonic(),
+                fps=0.0,
+                extra=extra,
+            ), r)
+        except Exception:
+            pass
+
+    while not stop_event.is_set():
+        engine      = hawk_factory.create(model_cfg)
+        frame_count = 0
+        fps_window  = []
+        last_stats  = time.monotonic()
+        stats_every = 3.0
+
+        try:
+            with engine:
+                logger.info("Hawk/mark thread ready — engine loaded")
+                _publish_build("ready")  # clears any stale build banner in Tower
+
+                while not stop_event.is_set():
+                    try:
+                        frame = inference_queue.get(timeout=0.5)
+                    except Exception:
+                        continue
+
+                    # ── Hawk: run inference ───────────────────────────────────
+                    result = engine.infer(frame)
+                    frame_count  += 1
+                    total_frames += 1
+
+                    # ── Publish detection metadata to Redis ───────────────────
+                    # mark subscribes to this if it runs as a separate service.
+                    # In this single-process design we pass result directly to
+                    # mark, but we still publish for tower's stats panel +
+                    # future decoupling.
+                    det_msg = DetectionMessage(
+                        frame_id=frame.frame_id,
+                        timestamp=result.timestamp,
+                        source="hawk",
+                        detections=[
+                            {
+                                "label":      d.label,
+                                "confidence": d.confidence,
+                                "bbox":       d.bbox,
+                                "class_id":   d.class_id,
+                            }
+                            for d in result.detections
+                        ],
+                        inference_ms=result.inference_ms,
+                    )
+                    try:
+                        publish_detection(det_msg, r)
+                    except Exception:
+                        pass  # Redis publish failures are non-fatal
+
+                    # ── Mark: annotate frame ──────────────────────────────────
+                    annotated = mark_draw(frame, result)
+                    put_nowait_drop(annotated_queue, annotated)
+
+                    # ── Stats ─────────────────────────────────────────────────
+                    now = time.monotonic()
+                    fps_window.append(now)
+                    fps_window = [t for t in fps_window if now - t <= 2.0]
+
+                    if now - last_stats >= stats_every:
+                        fps   = len(fps_window) / min(now - last_stats, 2.0) if fps_window else 0.0
+                        n_det = len(result.detections)
+                        logger.info(
+                            "Hawk: fps={:.1f} det={} inf={:.1f}ms engine={}",
+                            fps, n_det, result.inference_ms, result.engine_name,
+                        )
+                        publish_stats(StatsMessage(
+                            source="hawk",
+                            timestamp=now,
+                            fps=round(fps, 1),
+                            inference_ms=result.inference_ms,
+                            extra={
+                                "frame_count": frame_count,
+                                "detections":  n_det,
+                                "engine":      result.engine_name,
+                                "model":       model_cfg.name,
+                            },
+                        ), r)
+                        last_stats = now
+
+        except (EngineVersionMismatch, FileNotFoundError) as exc:
+            logger.warning(
+                "Hawk: engine load failed ({}) — checking for .pt checkpoint…",
+                type(exc).__name__,
             )
-            try:
-                publish_detection(det_msg, r)
-            except Exception:
-                pass  # Redis publish failures are non-fatal
-
-            # ── Mark: annotate frame ──────────────────────────────────────────
-            annotated = mark_draw(frame, result)
-            put_nowait_drop(annotated_queue, annotated)
-
-            # ── Stats ─────────────────────────────────────────────────────────
-            now = time.monotonic()
-            fps_window.append(now)
-            fps_window = [t for t in fps_window if now - t <= 2.0]
-
-            if now - last_stats >= stats_every:
-                fps = len(fps_window) / min(now - last_stats, 2.0) if fps_window else 0.0
-                n_det = len(result.detections)
-                logger.info(
-                    "Hawk: fps={:.1f} det={} inf={:.1f}ms engine={}",
-                    fps, n_det, result.inference_ms, result.engine_name,
+            if find_pt(model_cfg) is None:
+                logger.error(
+                    "Hawk: no .pt checkpoint found at {} — cannot auto-rebuild. "
+                    "Exiting hawk thread.",
+                    model_cfg.engine,
                 )
-                publish_stats(StatsMessage(
-                    source="hawk",
-                    timestamp=now,
-                    fps=round(fps, 1),
-                    inference_ms=result.inference_ms,
-                    extra={
-                        "frame_count":     frame_count,
-                        "detections":      n_det,
-                        "engine":          result.engine_name,
-                        "model":           model_cfg.name,
-                    },
-                ), r)
-                last_stats = now
+                _publish_build("failed", error="No .pt checkpoint found for auto-rebuild.")
+                break
 
-    logger.info("Hawk/mark thread stopped — {} frames processed", frame_count)
+            def _progress(msg: str) -> None:
+                logger.info("Engine build: {}", msg)
+                _publish_build("building", message=msg)
+
+            try:
+                new_path = build_engine(model_cfg, progress=_progress)
+                model_cfg.engine = str(new_path)
+                logger.info("Hawk: engine rebuilt at {} — reloading", new_path)
+                continue  # outer loop: recreate engine with updated path and retry
+
+            except Exception as build_err:
+                logger.error("Hawk: engine build failed — {}", build_err)
+                _publish_build("failed", error=str(build_err))
+                break
+
+        except Exception as exc:
+            logger.exception("Hawk/mark thread fatal error: {}", exc)
+            break
+
+    logger.info("Hawk/mark thread stopped — {} frames processed", total_frames)
 
 
 def run() -> None:

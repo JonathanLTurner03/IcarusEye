@@ -70,6 +70,31 @@
   @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
   @keyframes spin { to { transform: rotate(360deg); } }
 
+  #buildBanner {
+    display: none;
+    align-items: center;
+    gap: 8px;
+    padding: 6px 16px;
+    font-size: 12px;
+    font-family: var(--mono);
+    background: rgba(0,212,255,0.08);
+    border-bottom: 1px solid var(--accent);
+    color: var(--accent);
+    flex-shrink: 0;
+  }
+  #buildBanner.error {
+    background: rgba(255,107,53,0.10);
+    border-bottom-color: var(--accent2);
+    color: var(--accent2);
+  }
+  .build-spinner {
+    width: 11px; height: 11px; flex-shrink: 0;
+    border: 2px solid currentColor;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+
   .layout { display: grid; grid-template-columns: 1fr 320px; flex: 1; min-height: 0; }
 
   .video-pane { position: relative; background: #000; display: flex; flex-direction: column; min-height: 0; border-right: 1px solid var(--border); }
@@ -234,6 +259,11 @@
     <span id="statusText">CONNECTING</span>
   </div>
 </header>
+
+<div id="buildBanner">
+  <span class="build-spinner" id="buildSpinner"></span>
+  <span id="buildBannerMsg">Building TensorRT engine…</span>
+</div>
 
 <div class="layout">
 
@@ -496,8 +526,27 @@ async function pollStatus() {
       const det = hawk.extra && hawk.extra.detections_per_frame !== undefined ? hawk.extra.detections_per_frame.toFixed(1) : '—';
       document.getElementById('statDet').textContent = hawk.stale ? 'STALE' : det;
       document.getElementById('statDet').className = 'stat-value ' + (hawk.stale ? 'warn' : '');
+      const buildStatus = hawk.extra && hawk.extra.build_status;
+      if (buildStatus === 'building') {
+        showBuildBanner(hawk.extra.build_progress || 'Building TensorRT engine…', false);
+      } else if (buildStatus === 'failed') {
+        showBuildBanner('Engine build failed: ' + (hawk.extra.build_error || 'unknown error'), true);
+      } else {
+        hideBuildBanner();
+      }
     }
   } catch (_) {}
+}
+
+function showBuildBanner(msg, isError) {
+  const el = document.getElementById('buildBanner');
+  el.style.display = 'flex';
+  el.classList.toggle('error', !!isError);
+  document.getElementById('buildBannerMsg').textContent = msg;
+  document.getElementById('buildSpinner').style.display = isError ? 'none' : '';
+}
+function hideBuildBanner() {
+  document.getElementById('buildBanner').style.display = 'none';
 }
 
 log('Tower initializing');

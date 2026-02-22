@@ -33,6 +33,11 @@ from pipeline.hawk.base import DetectionResult, InferenceEngine, InferenceResult
 from pipeline.shared.config import ModelConfig
 
 
+class EngineVersionMismatch(RuntimeError):
+    """Raised when the .engine file TRT version doesn't match the current runtime."""
+    pass
+
+
 class TensorRTEngine(InferenceEngine):
     """
     YOLO26 TensorRT inference engine for NVIDIA Jetson.
@@ -84,7 +89,13 @@ class TensorRTEngine(InferenceEngine):
         import numpy as np
         h = w = self._cfg.imgsz
         dummy = np.zeros((h, w, 3), dtype=np.uint8)
-        self._model(dummy, verbose=False)
+        try:
+            self._model(dummy, verbose=False)
+        except (AttributeError, RuntimeError) as e:
+            raise EngineVersionMismatch(
+                f"TRT engine {self._engine_path.name} is incompatible with the current "
+                f"TensorRT runtime. Rebuild required."
+            ) from e
 
         self._class_names = self._model.names  # dict {int: str}
         load_ms = (time.monotonic() - t0) * 1000
