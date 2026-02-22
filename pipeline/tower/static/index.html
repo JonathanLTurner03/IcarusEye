@@ -546,6 +546,8 @@ async function pollStatus() {
   } catch (_) {}
 }
 
+let _engineWasBuilding = false;
+
 function showBuildBanner(msg, isError) {
   const el = document.getElementById('buildBanner');
   el.style.display = 'flex';
@@ -558,10 +560,15 @@ function showBuildBanner(msg, isError) {
   ov.classList.toggle('error', !!isError);
   document.getElementById('buildOverlaySpinner').style.display = isError ? 'none' : '';
   document.getElementById('buildOverlayMsg').textContent = isError ? 'ENGINE BUILD FAILED' : 'BUILDING ENGINE';
+  if (!isError) _engineWasBuilding = true;
 }
 function hideBuildBanner() {
   document.getElementById('buildBanner').style.display = 'none';
   document.getElementById('buildOverlay').style.display = 'none';
+  if (_engineWasBuilding) {
+    _engineWasBuilding = false;
+    startFeed('/stream/feed');
+  }
 }
 
 log('Tower initializing');
