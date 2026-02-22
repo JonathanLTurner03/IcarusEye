@@ -17,8 +17,10 @@ import asyncio
 import time
 from typing import AsyncGenerator
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import JSONResponse, StreamingResponse
+
+from pipeline.shared.redis_client import ControlMessage, publish_control
 
 router = APIRouter()
 
@@ -133,3 +135,34 @@ async def pipeline_stats(request: Request):
         }
 
     return JSONResponse(result)
+
+
+_VALID_TYPES = {"file", "v4l2", "rtsp", "gstreamer_uri"}
+
+
+@router.post("/control/source")
+async def change_source(request: Request):
+    """Send a swap_source control command to the pipeline via Redis."""
+    body = await request.json()
+    source_type = body.get("type", "")
+    if source_type not in _VALID_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid source type '{source_type}'. Must be one of: {sorted(_VALID_TYPES)}",
+        )
+
+    msg = ControlMessage(
+        command="swap_source",
+        payload={
+            "type":      source_type,
+            "uri":       body.get("uri", ""),
+            "device":    body.get("device", ""),
+            "width":     int(body.get("width", 0)),
+            "height":    int(body.get("height", 0)),
+            "framerate": int(body.get("framerate", 30)),
+            "loop":      bool(body.get("loop", True)),
+        },
+    )
+    r = request.app.state.redis_client
+    publish_control(msg, r)
+    return JSONResponse({"status": "ok", "source_type": source_type})

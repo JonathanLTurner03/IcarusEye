@@ -18,7 +18,7 @@ from loguru import logger
 
 from pipeline.tower.api.stream import router as stream_router
 from pipeline.tower.mjpeg.receiver import FrameReceiver
-from pipeline.shared.redis_client import Channels, Subscriber
+from pipeline.shared.redis_client import Channels, Subscriber, get_client
 from pipeline.frame_server import RAW_PORT, ANNOTATED_PORT
 
 
@@ -35,6 +35,9 @@ async def lifespan(app: FastAPI):
     ann_receiver.start()
     app.state.raw_receiver       = raw_receiver
     app.state.annotated_receiver = ann_receiver
+
+    # ── Redis client (for publishing control messages) ────────────────────────
+    app.state.redis_client = get_client(host=redis_host, port=redis_port)
 
     # ── Redis stats subscriber ────────────────────────────────────────────────
     app.state.pipeline_stats: dict[str, dict] = {}

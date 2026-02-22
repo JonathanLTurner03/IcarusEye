@@ -271,7 +271,7 @@
         <select id="cfgType" onchange="onSourceTypeChange()">
           <option value="file">File</option>
           <option value="rtsp">RTSP</option>
-          <option value="rtp">RTP</option>
+          <option value="gstreamer_uri">GStreamer / RTP</option>
           <option value="v4l2">V4L2 Device</option>
         </select>
       </div>
@@ -423,21 +423,57 @@ function updateOverlay() {
 
 function openSourceModal() { document.getElementById('sourceModal').classList.add('open'); document.getElementById('modalSourceInput').focus(); }
 function closeSourceModal() { document.getElementById('sourceModal').classList.remove('open'); }
-function submitSourceChange() {
-  if (!document.getElementById('modalSourceInput').value.trim()) return;
+async function submitSourceChange() {
+  const uri = document.getElementById('modalSourceInput').value.trim();
+  if (!uri) return;
   closeSourceModal();
-  log('Note: change source via pipeline config or env and restart pipeline', 'warn');
+  // Auto-detect type from URI
+  let type = 'file';
+  if (uri.startsWith('rtsp://') || uri.startsWith('rtp://')) type = 'rtsp';
+  else if (uri.startsWith('/dev/')) type = 'v4l2';
+  try {
+    await _sendSourceSwap(type, uri);
+  } catch (e) {
+    log(`Source swap error: ${e.message}`, 'error');
+  }
 }
 
 function onSourceTypeChange() {
   const type = document.getElementById('cfgType').value;
-  const p = { file:'/app/sample/sample.mp4', rtsp:'rtsp://192.168.1.x:554/stream', rtp:'rtp://127.0.0.1:5000', v4l2:'/dev/video0' };
-  document.getElementById('cfgPathLabel').textContent = type === 'v4l2' ? 'Device' : 'URI';
+  const p = { file: '/app/sample/sample.mp4', rtsp: 'rtsp://192.168.1.x:554/stream', gstreamer_uri: 'rtp://127.0.0.1:5000', v4l2: '/dev/video0' };
+  document.getElementById('cfgPathLabel').textContent = type === 'v4l2' ? 'Device' : 'URI / Path';
   document.getElementById('cfgPath').placeholder = p[type] || '';
 }
 
+async function _sendSourceSwap(type, uri) {
+  const payload = { type };
+  if (type === 'v4l2') {
+    payload.device = uri;
+  } else {
+    payload.uri = uri;
+  }
+  const res = await fetch('/stream/control/source', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
+  const data = await res.json();
+  if (res.ok) {
+    log(`Source swap sent: ${type} — ${uri}`, 'ok');
+  } else {
+    log(`Source swap failed: ${data.detail || 'unknown error'}`, 'error');
+  }
+}
+
 async function applySource() {
-  log('Source changes require updating pipeline config and restarting pipeline service', 'warn');
+  const type = document.getElementById('cfgType').value;
+  const uri  = document.getElementById('cfgPath').value.trim();
+  if (!uri) { log('Enter a path, URI, or device before applying', 'warn'); return; }
+  try {
+    await _sendSourceSwap(type, uri);
+  } catch (e) {
+    log(`Source swap error: ${e.message}`, 'error');
+  }
 }
 
 async function pollStatus() {
