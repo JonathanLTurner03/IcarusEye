@@ -59,7 +59,10 @@ def build_engine(
 
     logger.info("Engine export starting — source={} imgsz={}", pt_path, cfg.imgsz)
     model = YOLO(str(pt_path))
-    exported = model.export(format="engine", device=0, imgsz=cfg.imgsz)
+    # workspace=4 gives TRT 4 GiB of scratch memory for tactic search.
+    # Without this, TRT may report "Available: 0MB" and skip faster tactics,
+    # producing a valid but slower engine.
+    exported = model.export(format="engine", device=0, imgsz=cfg.imgsz, workspace=4)
     engine_path = Path(exported)
     # NOTE: .pt file is never deleted or moved — only the .engine file is created/replaced.
 
