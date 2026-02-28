@@ -26,6 +26,11 @@ def _gstreamer_available() -> bool:
     return "GStreamer" in cv2.getBuildInformation()
 
 
+def _is_jetson() -> bool:
+    """Return True only when the Jetson HW decoder device is present and mapped."""
+    return os.path.exists("/dev/nvhost-nvdec")
+
+
 class RTSPSource(CaptureSource):
     """
     Captures from an RTSP stream or generic URI via OpenCV.
@@ -70,7 +75,7 @@ class RTSPSource(CaptureSource):
         Hardcodes H.264; swap rtph264depay/h264parse for rtph265depay/h265parse
         if your stream uses HEVC.
         """
-        if not _gstreamer_available():
+        if not _gstreamer_available() or not _is_jetson():
             return None
         pipeline = (
             f"rtspsrc location={self._uri} latency=50 protocols=tcp ! "

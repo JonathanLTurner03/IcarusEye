@@ -52,6 +52,7 @@ services:
     devices:
       - /dev/v4l2-nvdec:/dev/v4l2-nvdec
       - /dev/v4l2-nvenc:/dev/v4l2-nvenc
+      - /dev/nvhost-nvdec:/dev/nvhost-nvdec
   #   - /dev/icaruseye/capture0:/dev/capture0
 
   tower:
