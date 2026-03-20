@@ -1,0 +1,5 @@
+# Pipeline dependencies for CPU / dev mode (no GPU, no TensorRT)
+# Used by docker/pipeline/Dockerfile.cpu
+# Inference is handled by MockEngine (DEV_MODE=true); ultralytics not needed.
+numpy<2
+opencv-python-headless>=4.9.0

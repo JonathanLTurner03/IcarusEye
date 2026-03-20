@@ -1,4 +1,6 @@
 # IcarusEye v2
+# Default: CPU / dev mode — works on any machine without a GPU.
+# For GPU or Jetson, run ./setup.sh first to generate docker-compose.override.yml.
 networks:
   icaruseye:
     driver: bridge
@@ -26,7 +28,7 @@ services:
   pipeline:
     build:
       context: .
-      dockerfile: docker/pipeline/Dockerfile
+      dockerfile: docker/pipeline/Dockerfile.cpu
     container_name: icaruseye-pipeline
     restart: unless-stopped
     networks:
@@ -37,23 +39,16 @@ services:
     expose:
       - "5100"   # raw frame server
       - "5101"   # annotated frame server
-    runtime: nvidia                          
     environment:
-      - NVIDIA_VISIBLE_DEVICES=all
-      - NVIDIA_DRIVER_CAPABILITIES=all           
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - DEV_MODE=true
     env_file:
       - .env
     volumes:
       - ./configs:/app/configs:ro
       - ./sample:/app/sample:ro
       - ./models:/app/models
-    devices:
-      - /dev/v4l2-nvdec:/dev/v4l2-nvdec
-      - /dev/v4l2-nvenc:/dev/v4l2-nvenc
-      - /dev/nvhost-nvdec:/dev/nvhost-nvdec
-  #   - /dev/icaruseye/capture0:/dev/capture0
 
   tower:
     build:

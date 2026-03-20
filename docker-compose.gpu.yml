@@ -1,0 +1,15 @@
+# IcarusEye v2 — x86_64 NVIDIA GPU overlay
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.gpu.yml up
+# Or:    ./setup.sh  (auto-copies this to docker-compose.override.yml)
+#
+# Requires: x86_64 host, NVIDIA GPU, nvidia-container-toolkit
+services:
+  pipeline:
+    build:
+      context: .
+      dockerfile: docker/pipeline/Dockerfile.gpu
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+      - DEV_MODE=false

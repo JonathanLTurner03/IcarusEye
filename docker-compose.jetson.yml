@@ -1,0 +1,20 @@
+# IcarusEye v2 — Jetson overlay
+# Usage: docker-compose -f docker-compose.yml -f docker-compose.jetson.yml up
+# Or:    ./setup.sh  (auto-copies this to docker-compose.override.yml)
+#
+# Requires: NVIDIA Jetson with JetPack 6.x, nvidia-container-toolkit
+services:
+  pipeline:
+    build:
+      context: .
+      dockerfile: docker/pipeline/Dockerfile.jetson
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=all
+      - DEV_MODE=false
+    devices:
+      - /dev/v4l2-nvdec:/dev/v4l2-nvdec
+      - /dev/v4l2-nvenc:/dev/v4l2-nvenc
+      - /dev/nvhost-nvdec:/dev/nvhost-nvdec
+    #  - /dev/icaruseye/capture0:/dev/capture0

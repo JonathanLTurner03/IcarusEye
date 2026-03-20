@@ -1,0 +1,37 @@
+# IcarusEye v2 — Pipeline service (x86_64 NVIDIA GPU)
+# Requires: NVIDIA GPU + nvidia-container-toolkit
+# Supports TensorRT inference via pip packages (no Jetson hardware needed)
+FROM nvidia/cuda:12.3.2-cudnn9-runtime-ubuntu22.04
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    python3.10 \
+    python3-pip \
+    python3.10-dev \
+    libglib2.0-0 \
+    libgl1 \
+    v4l-utils \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install PyTorch with CUDA 12.1 wheels before ultralytics so it gets the GPU build
+RUN pip3 install --no-cache-dir \
+    torch torchvision \
+    --index-url https://download.pytorch.org/whl/cu121
+
+# TensorRT via pip (x86_64 only) + ultralytics + project requirements
+COPY requirements/base.txt  /tmp/requirements-base.txt
+COPY requirements/lens.txt  /tmp/requirements-lens.txt
+RUN pip3 install --no-cache-dir \
+    tensorrt>=8.6.0 \
+    -r /tmp/requirements-base.txt \
+    -r /tmp/requirements-lens.txt
+
+WORKDIR /app
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+
+COPY pipeline/ ./pipeline/
+
+CMD ["python3", "-m", "pipeline.pipeline_service.main"]

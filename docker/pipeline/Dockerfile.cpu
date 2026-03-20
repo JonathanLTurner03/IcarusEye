@@ -1,0 +1,26 @@
+# IcarusEye v2 — Pipeline service (CPU / dev / any arch)
+# Runs in mock inference mode (DEV_MODE=true). No GPU required.
+# Works on: Linux x86_64, Linux aarch64, macOS (via Docker Desktop), WSL2
+FROM python:3.10-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libglib2.0-0 \
+    libgl1 \
+    ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY requirements/base.txt          /tmp/requirements-base.txt
+COPY requirements/pipeline-cpu.txt  /tmp/requirements-pipeline-cpu.txt
+RUN pip install --no-cache-dir \
+    -r /tmp/requirements-base.txt \
+    -r /tmp/requirements-pipeline-cpu.txt
+
+WORKDIR /app
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
+# Force mock inference and file-based capture — no hardware needed
+ENV DEV_MODE=true
+
+COPY pipeline/ ./pipeline/
+
+CMD ["python3", "-m", "pipeline.pipeline_service.main"]
