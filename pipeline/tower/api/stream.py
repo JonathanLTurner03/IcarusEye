@@ -104,6 +104,13 @@ async def annotated_feed(request: Request):
     )
 
 
+@router.get("/detections")
+async def latest_detections(request: Request):
+    """Return the most recent detection frame published by hawk via Redis."""
+    data: dict = getattr(request.app.state, "latest_detections", {})
+    return JSONResponse(data)
+
+
 @router.get("/status")
 async def status(request: Request):
     raw = getattr(request.app.state, "raw_receiver", None)

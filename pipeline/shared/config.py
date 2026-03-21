@@ -224,6 +224,10 @@ def _apply_env(cfg: PipelineConfig) -> None:
         cfg.dev.sample_video = v
         cfg.capture.uri = v
 
+    if v := env.get("MODEL_PATH"):
+        for m in cfg.models:
+            m.engine = v
+
     if v := env.get("DEV_MODE"):
         cfg.dev.enabled = _truthy(v)
 

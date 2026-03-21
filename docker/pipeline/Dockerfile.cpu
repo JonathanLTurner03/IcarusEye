@@ -18,8 +18,6 @@ RUN pip install --no-cache-dir \
 WORKDIR /app
 ENV PYTHONPATH=/app
 ENV PYTHONUNBUFFERED=1
-# Force mock inference and file-based capture — no hardware needed
-ENV DEV_MODE=true
 
 COPY pipeline/ ./pipeline/
 

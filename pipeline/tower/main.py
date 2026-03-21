@@ -41,6 +41,7 @@ async def lifespan(app: FastAPI):
 
     # ── Redis stats subscriber ────────────────────────────────────────────────
     app.state.pipeline_stats: dict[str, dict] = {}
+    app.state.latest_detections: dict = {}
 
     def _on_stats(channel: str, data: dict) -> None:
         source_name = data.get("source", "unknown")
@@ -48,8 +49,17 @@ async def lifespan(app: FastAPI):
         app.state.pipeline_stats[source_name] = data
         logger.debug("Tower stats from {}: fps={}", source_name, data.get("fps"))
 
+    def _on_detections(channel: str, data: dict) -> None:
+        data["_received_at"] = time.time()
+        app.state.latest_detections = data
+        logger.debug(
+            "Tower detections: frame_id={} n={}",
+            data.get("frame_id"), len(data.get("detections", [])),
+        )
+
     subscriber = Subscriber(host=redis_host, port=redis_port)
     subscriber.on(Channels.STATS, _on_stats)
+    subscriber.on(Channels.DETECTIONS, _on_detections)
     subscriber.start()
     app.state.subscriber = subscriber
 

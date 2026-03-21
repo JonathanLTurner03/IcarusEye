@@ -149,6 +149,14 @@
   .log-feed .log-line.error { color: var(--accent2); }
   .log-feed .log-line.warn { color: var(--warn); }
 
+  .det-list { background: var(--bg); border: 1px solid var(--border); font-family: var(--mono); font-size: 0.65rem; max-height: 160px; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  .det-row { display: flex; align-items: center; gap: 8px; padding: 5px 10px; border-bottom: 1px solid var(--border); }
+  .det-row:last-child { border-bottom: none; }
+  .det-label { color: var(--text); flex: 1; text-transform: uppercase; letter-spacing: 0.08em; }
+  .det-conf { color: var(--accent); min-width: 42px; text-align: right; }
+  .det-bbox { color: var(--dim); font-size: 0.58rem; }
+  .det-empty { padding: 10px; color: var(--dim); text-align: center; letter-spacing: 0.1em; }
+
   .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.75); z-index: 500; display: none; align-items: center; justify-content: center; padding: 16px; }
   .modal-backdrop.open { display: flex; }
   .modal { background: var(--panel); border: 1px solid var(--border); padding: 24px; width: 440px; max-width: 100%; }
@@ -299,6 +307,13 @@
         <div class="stat-cell"><div class="stat-label">Source FPS</div><div class="stat-value" id="statFps">—</div></div>
         <div class="stat-cell"><div class="stat-label">Detections</div><div class="stat-value" id="statDet">—</div></div>
         <div class="stat-cell"><div class="stat-label">Latency</div><div class="stat-value" id="statLatency">—</div></div>
+      </div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-label">Detections <span id="detFrameId" style="color:var(--dim);font-size:0.55rem;margin-left:6px"></span></div>
+      <div class="det-list" id="detList">
+        <div class="det-empty">NO DETECTIONS</div>
       </div>
     </div>
 
@@ -531,9 +546,11 @@ async function pollStatus() {
     }
     const hawk = stats['hawk'];
     if (hawk) {
-      const det = hawk.extra && hawk.extra.detections_per_frame !== undefined ? hawk.extra.detections_per_frame.toFixed(1) : '—';
+      const det = hawk.extra && hawk.extra.detections !== undefined ? hawk.extra.detections : '—';
       document.getElementById('statDet').textContent = hawk.stale ? 'STALE' : det;
       document.getElementById('statDet').className = 'stat-value ' + (hawk.stale ? 'warn' : '');
+      document.getElementById('statLatency').textContent = hawk.stale ? 'STALE' : (hawk.inference_ms ? hawk.inference_ms.toFixed(1) + 'ms' : '—');
+      document.getElementById('statLatency').className = 'stat-value ' + (hawk.stale ? 'warn' : '');
       const buildStatus = hawk.extra && hawk.extra.build_status;
       if (buildStatus === 'building') {
         showBuildBanner(hawk.extra.build_progress || 'Building TensorRT engine…', false);
@@ -543,6 +560,35 @@ async function pollStatus() {
         hideBuildBanner();
       }
     }
+  } catch (_) {}
+}
+
+async function pollDetections() {
+  try {
+    const data = await fetch('/stream/detections').then(r => r.json());
+    const detections = data.detections || [];
+    const list = document.getElementById('detList');
+    const frameEl = document.getElementById('detFrameId');
+
+    if (data.frame_id !== undefined) {
+      frameEl.textContent = `#${data.frame_id}`;
+    }
+
+    // Side panel list
+    if (detections.length === 0) {
+      list.innerHTML = '<div class="det-empty">NO DETECTIONS</div>';
+      return;
+    }
+    list.innerHTML = detections.map(d => {
+      const conf = Math.round((d.confidence || 0) * 100) + '%';
+      const [x1, y1, x2, y2] = (d.bbox || []).map(v => (v * 100).toFixed(0));
+      const bbox = d.bbox ? `${x1},${y1}→${x2},${y2}` : '';
+      return `<div class="det-row">
+        <span class="det-label">${d.label || '?'}</span>
+        <span class="det-conf">${conf}</span>
+        <span class="det-bbox">${bbox}</span>
+      </div>`;
+    }).join('');
   } catch (_) {}
 }
 
@@ -574,7 +620,9 @@ function hideBuildBanner() {
 log('Tower initializing');
 onSourceTypeChange();
 setInterval(pollStatus, 3000);
+setInterval(pollDetections, 500);
 pollStatus();
+pollDetections();
 startFeed('/stream/feed');
 </script>
 </body>

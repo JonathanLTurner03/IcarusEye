@@ -42,7 +42,6 @@ services:
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - DEV_MODE=true
     env_file:
       - .env
     volumes:

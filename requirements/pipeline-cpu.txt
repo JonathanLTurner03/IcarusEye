@@ -1,5 +1,6 @@
-# Pipeline dependencies for CPU / dev mode (no GPU, no TensorRT)
+# Pipeline dependencies for CPU / cross-platform mode (no TensorRT)
 # Used by docker/pipeline/Dockerfile.cpu
-# Inference is handled by MockEngine (DEV_MODE=true); ultralytics not needed.
+# Supports PyTorchEngine (.pt models) on CPU, MPS (Apple Silicon), or CUDA.
 numpy<2
 opencv-python-headless>=4.9.0
+ultralytics>=8.3

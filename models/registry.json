@@ -1,0 +1,57 @@
+{
+  "_comment": "IcarusEye model registry. Add entries here to make models available in setup.sh.",
+  "_sources": {
+    "ultralytics": "Downloaded via the Ultralytics Python API (standard YOLO models).",
+    "url": "Downloaded directly from the given URL. Works with HuggingFace, GitHub releases, etc. For private HuggingFace repos set HF_TOKEN in your environment."
+  },
+  "models": [
+    {
+      "name": "yolo26n",
+      "display_name": "YOLOv26 Nano",
+      "description": "Fastest, edge-optimized — recommended for Nano",
+      "filename": "yolo26n.pt",
+      "source": "url",
+      "url": "https://github.com/ultralytics/assets/releases/download/v8.4.0/yolo26n.pt"
+    },
+    {
+      "name": "yolo26s",
+      "display_name": "YOLOv26 Small",
+      "description": "Fast with good accuracy",
+      "filename": "yolo26s.pt",
+      "source": "url",
+      "url": "https://github.com/ultralytics/assets/releases/download/v8.4.0/yolo26s.pt"
+    },
+    {
+      "name": "yolo26m",
+      "display_name": "YOLOv26 Medium",
+      "description": "Balanced speed and accuracy",
+      "filename": "yolo26m.pt",
+      "source": "url",
+      "url": "https://github.com/ultralytics/assets/releases/download/v8.4.0/yolo26m.pt"
+    },
+    {
+      "name": "yolo26l",
+      "display_name": "YOLOv26 Large",
+      "description": "High accuracy, slower inference",
+      "filename": "yolo26l.pt",
+      "source": "url",
+      "url": "https://github.com/ultralytics/assets/releases/download/v8.4.0/yolo26l.pt"
+    },
+    {
+      "name": "yolo11n",
+      "display_name": "YOLO11 Nano  [fallback]",
+      "description": "Standard Ultralytics nano model — no URL needed",
+      "filename": "yolo11n.pt",
+      "source": "ultralytics",
+      "url": ""
+    },
+    {
+      "name": "yolo11s",
+      "display_name": "YOLO11 Small  [fallback]",
+      "description": "Standard Ultralytics small model — no URL needed",
+      "filename": "yolo11s.pt",
+      "source": "ultralytics",
+      "url": ""
+    }
+  ]
+}
